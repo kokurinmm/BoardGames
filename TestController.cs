@@ -53,8 +53,8 @@ public sealed class TestController : IGameController
                         cell);
 
                     Color color = ((row + col) % 2 == 0)
-                        ? Color.FromArgb(255, 206, 158)
-                        : Color.FromArgb(209, 139, 71);
+                        ? Color.PeachPuff
+                        : Color.Peru;
 
                     using SolidBrush brush = new SolidBrush(color);
                     g.FillRectangle(brush, rect);
