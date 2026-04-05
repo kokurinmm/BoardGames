@@ -32,10 +32,6 @@ public sealed class CheckersController : IGameController
 
     private int _humanColor; // цвет пользователя
     private int _aiColor; // цвет ИИ
-
-    /// <summary>
-    /// Игрок, чей ход сейчас идёт.
-    /// </summary>
     private int _turn; // игрок, которому принадлежит очередь хода
 
     /// <summary>
@@ -55,7 +51,7 @@ public sealed class CheckersController : IGameController
 
     public bool IsAiTurn => !IsGameOver && _turn == _aiColor;
 
-    public void NewGame() // новая игра, включая случайный выбор цвета игроков
+    public void NewGame() // Запуск новой игры, в т.ч. случайный выбор цвета игроков
     {
         IsGameOver = false;
         _board = CheckersBoard.Initial();
