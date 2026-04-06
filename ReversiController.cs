@@ -149,7 +149,7 @@ public sealed class ReversiController : IGameController
                 },
                 evaluate: (pos, root, side, generatedMoves) => pos.Evaluate(root),
                 opponent: ReversiBoard.Opponent,
-                isTerminal: pos => pos.IsTerminal(),
+                isTerminal: (pos, side) => pos.IsTerminal(),
                 canPass: true,
                 rootPlayer: _aiColor,
                 depth: AlphaBetaDepth,
