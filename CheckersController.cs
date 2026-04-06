@@ -219,7 +219,7 @@ public sealed class CheckersController : IGameController
                 },
                 evaluate: (pos, root, side, generatedMoves) => pos.Evaluate(root, side, generatedMoves),
                 opponent: CheckersBoard.Opponent,
-                isTerminal: pos => false,
+                isTerminal: (pos, side) => pos.AllMoves(side).Count == 0, // игра закончена, если игроку некуда ходить
                 canPass: false,
                 rootPlayer: _aiColor,
                 depth: AlphaBetaDepth,
