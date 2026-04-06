@@ -7,7 +7,7 @@ namespace BoardGames;
 public partial class MainForm : Form
 {
 
-    private const bool USE_TEST_CONTROLLER = true; // временно использовать тестовый контролер вместо полноценного
+    private const bool USE_TEST_CONTROLLER = false; // временно использовать тестовый контролер вместо полноценного
 
     private readonly BoardView _boardView = new(); // объект BoardView для рисования доски
 
@@ -108,9 +108,9 @@ public partial class MainForm : Form
         if (USE_TEST_CONTROLLER)
             return new TestController(kind);
 
-        //return kind == GameKind.Checkers
-        //    ? new CheckersController()
-        //    : new ReversiController();
+        return kind == GameKind.Checkers
+            ? new CheckersController()
+            : new ReversiController();
     }
 
     /// <summary>
