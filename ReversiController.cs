@@ -12,6 +12,12 @@ public sealed class ReversiController : IGameController
     public GameKind Kind => GameKind.Reversi;
     public int BoardSize => ReversiBoard.BOARD_SIZE;
 
+    public string GameDisplayName => "Реверси";
+
+    public int WhitePieceCount => _board.Count(ReversiBoard.WHITE);
+
+    public int BlackPieceCount => _board.Count(ReversiBoard.BLACK);
+
     public AiMode Mode { get; set; } = AiMode.AlphaBeta;
     public int AlphaBetaDepth { get; set; } = 4;
     public int MonteCarloSimulations { get; set; } = 60;

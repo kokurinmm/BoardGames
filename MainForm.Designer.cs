@@ -94,7 +94,7 @@
             groupBox2.Size = new Size(261, 199);
             groupBox2.TabIndex = 1;
             groupBox2.TabStop = false;
-            groupBox2.Text = "Алгоритм";
+            groupBox2.Text = "Алгоритм ИИ";
             // 
             // nudSims
             // 
