@@ -23,6 +23,8 @@ public sealed class ReversiController : IGameController
     /// </summary>
     public string HumanPlayerDisplayName => Players.ReversiName(_humanColor);
 
+    public string? GameOverMessage { get; private set; }
+
     /// <summary>
     /// Текущая позиция на доске
     /// </summary>
@@ -31,6 +33,9 @@ public sealed class ReversiController : IGameController
     private int _humanColor; // цвет пользователя
     private int _aiColor; // цвет ИИ
     private int _turn; // игрок, которому принадлежит очередь хода
+
+    private ReversiBoard.Move? _pendingAiMove; // текущий ход ИИ
+    private bool _hasPendingAiMove; // выполнен ли уже найденный ход
 
     public bool IsAiTurn => !IsGameOver && _turn == _aiColor;
 
@@ -44,7 +49,11 @@ public sealed class ReversiController : IGameController
         _humanColor = Random.Shared.Next(2) == 0 ? ReversiBoard.BLACK : ReversiBoard.WHITE;
         _aiColor = ReversiBoard.Opponent(_humanColor);
 
-        AdvanceTurnIfNoMoves();
+        GameOverMessage = null;
+
+        _pendingAiMove = null; // на всякий случай - сброс анимации ИИ-хода
+        _hasPendingAiMove = false;
+
     }
 
     public void Draw(Graphics g, Rectangle rect) // Отрисовка доски
@@ -114,25 +123,59 @@ public sealed class ReversiController : IGameController
         _board.ApplyMove(row, col, _turn);
         _turn = ReversiBoard.Opponent(_turn);
 
-        AdvanceTurnIfNoMoves();
+        ResolveTurn();
     }
 
-    public bool MakeAiTurn()
+    public bool BeginAiTurnAnimation()
     {
-        if (IsGameOver)
-            return false;
-
-        if (_turn != _aiColor)
+        if (IsGameOver || _turn != _aiColor)
             return false;
 
         var legalMoves = _board.ValidMoves(_turn);
+
         if (legalMoves.Count == 0)
         {
-            // У ИИ нет ходов: пасуем.
             _turn = ReversiBoard.Opponent(_turn);
-            AdvanceTurnIfNoMoves();
+            ResolveTurn();
             return true;
         }
+
+        ReversiBoard.Move? bestMove = FindBestAiMove(legalMoves);
+        if (bestMove is null)
+            return false;
+
+        _pendingAiMove = bestMove.Value;
+        _hasPendingAiMove = true;
+        return true;
+    }
+
+    public bool HasPendingAiAnimation => _hasPendingAiMove;
+
+    public bool ApplyNextAiAnimationStep()
+    {
+        if (!_hasPendingAiMove || _pendingAiMove is null)
+            return false;
+
+        _board.ApplyMove(_pendingAiMove.Value.X, _pendingAiMove.Value.Y, _turn);
+        _pendingAiMove = null;
+        _hasPendingAiMove = false;
+
+        _turn = ReversiBoard.Opponent(_turn);
+        ResolveTurn();
+
+        return true;
+    }
+
+    /// <summary>
+    /// Найти лучший ход ИИ
+    /// </summary>
+    private ReversiBoard.Move? FindBestAiMove(
+        Dictionary<ReversiBoard.Move, List<(int x, int y)>>? legalMoves = null)
+    {
+        legalMoves ??= _board.ValidMoves(_turn);
+
+        if (legalMoves.Count == 0)
+            return null;
 
         ReversiBoard.Move? bestMove = null;
 
@@ -179,37 +222,66 @@ public sealed class ReversiController : IGameController
                 bestMove = new ReversiBoard.Move(bestMoveRef.X, bestMoveRef.Y);
         }
 
-        if (bestMove is null)
+        return bestMove;
+    }
+
+    public bool MakeAiTurn()
+    {
+        if (IsGameOver)
+            return false;
+
+        if (_turn != _aiColor)
+            return false;
+
+        var legalMoves = _board.ValidMoves(_turn);
+        if (legalMoves.Count == 0)
         {
             _turn = ReversiBoard.Opponent(_turn);
-            AdvanceTurnIfNoMoves();
+            ResolveTurn();
             return true;
         }
 
+        ReversiBoard.Move? bestMove = FindBestAiMove(legalMoves);
+        if (bestMove is null)
+            return false;
+
         _board.ApplyMove(bestMove.Value.X, bestMove.Value.Y, _turn);
         _turn = ReversiBoard.Opponent(_turn);
-        AdvanceTurnIfNoMoves();
+        ResolveTurn();
         return true;
     }
 
     /// <summary>
-    /// Обработка ситуации, когда нет доступных ходов
+    /// Выяснить, чей дальше ход (или конец игры) после хода или паса
     /// </summary>
-    private void AdvanceTurnIfNoMoves()
+    private void ResolveTurn()
     {
-        if (_board.IsTerminal())
+        if (_board.HasAnyMoves(_turn)) // если у текущего игрока есть допустимые ходы, он и должен ходить
+            return;
+
+        int opponent = ReversiBoard.Opponent(_turn);
+
+        if (_board.HasAnyMoves(opponent)) // если ходов нет, а у противника есть, то ходит противник
         {
-            IsGameOver = true;
+            _turn = opponent;
             return;
         }
 
-        if (!_board.HasAnyMoves(_turn))
-        {
-            _turn = ReversiBoard.Opponent(_turn);
+        IsGameOver = true; // если допустимых ходов нет ни у кого, игра закончена
+        SetGameOverMessage();
+    }
 
-            if (_board.IsTerminal())
-                IsGameOver = true;
-        }
+    private void SetGameOverMessage()
+    {
+        int humanCount = _board.Count(_humanColor);
+        int aiCount = _board.Count(_aiColor);
+
+        if (humanCount > aiCount)
+            GameOverMessage = "Вы победили!";
+        else if (humanCount < aiCount)
+            GameOverMessage = "Победил ИИ";
+        else
+            GameOverMessage = "Ничья";
     }
 
     /// <summary>

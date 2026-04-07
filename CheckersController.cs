@@ -25,6 +25,8 @@ public sealed class CheckersController : IGameController
     /// </summary>
     public string HumanPlayerDisplayName => Players.CheckersName(_humanColor);
 
+    public string? GameOverMessage { get; private set; }
+
     /// <summary>
     /// Текущая позиция на доске
     /// </summary>
@@ -49,6 +51,9 @@ public sealed class CheckersController : IGameController
     /// </summary>
     private bool _mustContinueJump;
 
+    private CheckersBoard.MoveChain? _pendingAiMove; // текущий ход или цепочка ходов ИИ
+    private int _pendingAiStepIndex; // текущий шаг в цепочке ходов ИИ
+
     public bool IsAiTurn => !IsGameOver && _turn == _aiColor;
 
     public void NewGame() // Запуск новой игры, в т.ч. случайный выбор цвета игроков
@@ -64,6 +69,9 @@ public sealed class CheckersController : IGameController
         _selectedPiece = null;
         _possibleMoves.Clear();
         _mustContinueJump = false;
+        GameOverMessage = null;
+
+        _pendingAiMove = null; // на всякий случай - сброс анимации ИИ-хода
     }
 
     public void Draw(Graphics g, Rectangle rect) // Отрисовка доски
@@ -188,26 +196,88 @@ public sealed class CheckersController : IGameController
         CheckGameOver();
     }
 
-    public bool MakeAiTurn()
+    public bool BeginAiTurnAnimation()
     {
-        if (IsGameOver)
+        if (IsGameOver || _turn != _aiColor)
             return false;
 
-        if (_turn != _aiColor)
+        _pendingAiMove = FindBestAiMove();
+        _pendingAiStepIndex = 0;
+
+        return _pendingAiMove is not null;
+    }
+
+    public bool HasPendingAiAnimation =>
+    _pendingAiMove is not null &&
+    _pendingAiStepIndex < _pendingAiMove.Steps.Count;
+
+    public bool ApplyNextAiAnimationStep()
+    {
+        if (!HasPendingAiAnimation || _pendingAiMove is null)
             return false;
 
-        List<CheckersBoard.MoveChain> moves = _board.AllMoves(_aiColor);
-        if (moves.Count == 0)
+        _board.ApplyStep(_pendingAiMove.Steps[_pendingAiStepIndex]);
+        _pendingAiStepIndex++;
+
+        // если это был последний шаг, завершаем ход
+        if (_pendingAiStepIndex >= _pendingAiMove.Steps.Count)
         {
+            _pendingAiMove = null;
+            _pendingAiStepIndex = 0;
+
+            _turn = CheckersBoard.Opponent(_turn);
             CheckGameOver();
-            return false;
         }
 
-        CheckersBoard.MoveChain? bestMove;
+        return true;
+    }
+
+    /// <summary>
+    /// Применить один ход. Используется MainForm для анимации цепочки ходов
+    /// </summary>
+    public void ApplyAiMoveStep(CheckersBoard.MoveStep step)
+    {
+        _board.ApplyStep(step);
+    }
+
+    /// <summary>
+    /// Завершить ход ИИ
+    /// </summary>
+    public void FinishAiMove()
+    {
+        _turn = CheckersBoard.Opponent(_turn);
+        CheckGameOver();
+    }
+
+    public bool MakeAiTurn()
+    {
+        CheckersBoard.MoveChain? bestMove = FindBestAiMove();
+        if (bestMove is null)
+            return false;
+
+        _board.ApplyChain(bestMove);
+        _turn = CheckersBoard.Opponent(_turn);
+        CheckGameOver();
+        return true;
+    }
+
+    /// <summary>
+    /// Найти лучший ход ИИ (или цепочку), но не применять его, чтобы MainForm могла показать ходы в цепочке по одному
+    /// </summary>
+    public CheckersBoard.MoveChain? FindBestAiMove()
+    {
+        if (IsGameOver || _turn != _aiColor)
+            return null;
+
+        List<CheckersBoard.MoveChain> legalMoves = _board.AllMoves(_turn);
+        if (legalMoves.Count == 0)
+        {
+            CheckGameOver();
+            return null;
+        }
 
         if (Mode == AiMode.AlphaBeta)
         {
-            // Для ускорения поиска упорядочиваем ходы по длине цепочки: сначала обрабатываем длинные взятия
             (double score, CheckersBoard.MoveChain? move) = AlphaBeta.Search(
                 position: _board,
                 legalMoves: (pos, side) => pos.AllMoves(side).OrderByDescending(ch => ch.Length).ToList(),
@@ -219,7 +289,7 @@ public sealed class CheckersController : IGameController
                 },
                 evaluate: (pos, root, side, generatedMoves) => pos.Evaluate(root, side, generatedMoves),
                 opponent: CheckersBoard.Opponent,
-                isTerminal: (pos, side) => pos.AllMoves(side).Count == 0, // игра закончена, если игроку некуда ходить
+                isTerminal: (pos, side) => pos.AllMoves(side).Count == 0,
                 canPass: false,
                 rootPlayer: _aiColor,
                 depth: AlphaBetaDepth,
@@ -227,11 +297,11 @@ public sealed class CheckersController : IGameController
                 beta: double.PositiveInfinity,
                 maximizingPlayer: true);
 
-            bestMove = move;
+            return move;
         }
         else
         {
-            bestMove = MonteCarlo.BestMove(
+            return MonteCarlo.BestMove(
                 position: _board,
                 legalMoves: (pos, side) => pos.AllMoves(side),
                 applyMoveToCopy: (pos, moveChain) =>
@@ -244,17 +314,6 @@ public sealed class CheckersController : IGameController
                 player: _aiColor,
                 simulations: MonteCarloSimulations);
         }
-
-        if (bestMove is null)
-        {
-            CheckGameOver();
-            return false;
-        }
-
-        _board.ApplyChain(bestMove);
-        _turn = _humanColor;
-        CheckGameOver();
-        return true;
     }
 
     /// <summary>
@@ -297,5 +356,10 @@ public sealed class CheckersController : IGameController
             return;
 
         IsGameOver = true;
+
+        if (_turn == _humanColor)
+            GameOverMessage = "Победил ИИ";
+        else
+            GameOverMessage = "Вы победили!";
     }
 }

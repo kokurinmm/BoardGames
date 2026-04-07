@@ -5,7 +5,7 @@ using System.Text;
 namespace BoardGames;
 
 /// <summary>
-/// Позиция в игре в шашки и правила игры
+/// Позиция в игре в реверси и правила игры
 /// Класс не связан с формами и может использоваться в т.ч. в играх ИИ между собой
 /// </summary>
 public sealed class ReversiBoard

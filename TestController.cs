@@ -20,6 +20,8 @@ public sealed class TestController : IGameController
     public int HumanPlayer { get; private set; } = 1;
     public string HumanPlayerDisplayName => Players.CheckersName(HumanPlayer);
 
+    public string? GameOverMessage => null;
+
     // последняя клетка, по которой щёлкнул пользователь
     private int _lastRow = -1;
     private int _lastCol = -1;
@@ -97,6 +99,12 @@ public sealed class TestController : IGameController
         _lastRow = row;
         _lastCol = col;
     }
+
+    public bool BeginAiTurnAnimation() => false;
+
+    public bool HasPendingAiAnimation => false;
+
+    public bool ApplyNextAiAnimationStep() => false;
 
     public bool MakeAiTurn()
     {

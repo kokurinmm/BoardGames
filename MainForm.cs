@@ -7,11 +7,11 @@ namespace BoardGames;
 public partial class MainForm : Form
 {
 
-    private const bool USE_TEST_CONTROLLER = false; // временно использовать тестовый контролер вместо полноценного
-
     private readonly BoardView _boardView = new(); // объект BoardView для рисования доски
 
     private IGameController _controller = null!; // текущий контроллер игры (зависит от выбранной игры)
+
+    private bool _aiLoopRunning; // выполняется асинхронный цикл (чтобы не запустилось два сразу)
 
     public MainForm()
     {
@@ -105,9 +105,6 @@ public partial class MainForm : Form
     {
         GameKind kind = rbCheckers.Checked ? GameKind.Checkers : GameKind.Reversi;
 
-        if (USE_TEST_CONTROLLER)
-            return new TestController(kind);
-
         return kind == GameKind.Checkers
             ? new CheckersController()
             : new ReversiController();
@@ -192,20 +189,64 @@ public partial class MainForm : Form
     /// </summary>
     private async Task MaybeRunAiLoopAsync()
     {
-        if (_controller.IsGameOver)
+        if (_aiLoopRunning)
             return;
 
-        while (_controller.IsAiTurn && !_controller.IsGameOver)
+        _aiLoopRunning = true;
+        try
         {
-            await Task.Delay(400);
+            while (_controller.IsAiTurn && !_controller.IsGameOver)
+            {
+                bool changed = _controller.BeginAiTurnAnimation();
 
-            bool changed = _controller.MakeAiTurn();
-            UpdateStatusAndParams();
-            _boardView.Invalidate();
+                UpdateStatusAndParams();
+                _boardView.Refresh();
 
-            if (!changed)
-                break;
+                if (!changed)
+                    break;
+
+                // Если у подготовленного хода есть визуальные шаги, применяем их по одному с задержками
+                while (_controller.HasPendingAiAnimation && !_controller.IsGameOver)
+                {
+                    await Task.Delay(400);
+
+                    bool stepChanged = _controller.ApplyNextAiAnimationStep();
+
+                    UpdateStatusAndParams();
+                    _boardView.Refresh();
+
+                    if (!stepChanged)
+                        break;
+                }
+
+                // Если после этого ИИ должен ходить ещё раз подряд, сделать паузу между полными ходами
+                if (_controller.IsAiTurn && !_controller.IsGameOver)
+                    await Task.Delay(400);
+            }
+            if (_controller.IsGameOver)
+            {
+                ShowGameOverMessage();
+                return;
+            }
         }
+        finally
+        {
+            _aiLoopRunning = false;
+        }
+    }
+
+
+
+    /// <summary>
+    /// Показать окно об окончании игры
+    /// </summary>
+    private void ShowGameOverMessage()
+    {
+        MessageBox.Show(
+            _controller.GameOverMessage,
+            "Конец игры",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Information);
     }
 
 }
