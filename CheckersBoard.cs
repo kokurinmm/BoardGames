@@ -351,4 +351,19 @@ public sealed class CheckersBoard
 
         return score;
     }
+
+    /// <summary>
+    /// Количество фигур данного цвета для заголовка формы, дамки считаются наравне с обычными шашками
+    /// </summary>
+    public int Count(int color)
+    {
+        int total = 0;
+
+        for (int row = 0; row < BOARD_SIZE; row++)
+            for (int col = 0; col < BOARD_SIZE; col++)
+                if (PieceColor(Grid[row, col]) == color)
+                    total++;
+
+        return total;
+    }
 }

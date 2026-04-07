@@ -10,6 +10,12 @@ public sealed class TestController : IGameController
     public GameKind Kind { get; }
     public int BoardSize => 8;
 
+    public string GameDisplayName => "Тест";
+
+    public int WhitePieceCount => 0;
+
+    public int BlackPieceCount => 0;
+
     public AiMode Mode { get; set; } = AiMode.AlphaBeta;
     public int AlphaBetaDepth { get; set; } = 3;
     public int MonteCarloSimulations { get; set; } = 50;

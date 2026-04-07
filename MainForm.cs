@@ -168,6 +168,7 @@ public partial class MainForm : Form
     {
         UpdateAiParamsFromUi();
         lblStatus.Text = "Вы: " + _controller.HumanPlayerDisplayName;
+        Text = $"{_controller.GameDisplayName} — Белые: {_controller.WhitePieceCount}, Чёрные: {_controller.BlackPieceCount}";
     }
 
     /// <summary>
