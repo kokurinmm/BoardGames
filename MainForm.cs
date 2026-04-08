@@ -80,11 +80,13 @@ public partial class MainForm : Form
         // изменение числовых параметров
         nudDepth.ValueChanged += (_, __) =>
         {
+            _controller.Mode = AiMode.AlphaBeta;
             UpdateStatusAndParams();
         };
 
         nudSims.ValueChanged += (_, __) =>
         {
+            _controller.Mode = AiMode.MonteCarlo;
             UpdateStatusAndParams();
         };
 
@@ -93,7 +95,7 @@ public partial class MainForm : Form
         {
             _controller.NewGame();
             UpdateStatusAndParams();
-            _boardView.Invalidate(); // доска требует перерисовки, но не срочно
+            _boardView.Refresh(); // доска требует перерисовки
             _ = MaybeRunAiLoopAsync(); // если очередь хода ИИ
         };
     }
@@ -128,7 +130,7 @@ public partial class MainForm : Form
         {
             _controller.HandleCellClick(row, col);
             UpdateStatusAndParams();
-            _boardView.Invalidate();
+            _boardView.Refresh();
             _ = MaybeRunAiLoopAsync();
         };
     }
@@ -167,6 +169,8 @@ public partial class MainForm : Form
     private void UpdateStatusAndParams()
     {
         UpdateAiParamsFromUi();
+        rbAlphaBeta.Checked = _controller.Mode == AiMode.AlphaBeta;
+        rbMonteCarlo.Checked = _controller.Mode == AiMode.MonteCarlo;
         lblStatus.Text = "Вы: " + _controller.HumanPlayerDisplayName;
         Text = $"{_controller.GameDisplayName} — Белые: {_controller.WhitePieceCount}, Чёрные: {_controller.BlackPieceCount}";
     }
@@ -181,7 +185,7 @@ public partial class MainForm : Form
         LoadDefaultsFromController();
         _controller.NewGame();
         UpdateStatusAndParams();
-        _boardView.Invalidate();
+        _boardView.Refresh();
         _ = MaybeRunAiLoopAsync();
     }
 
@@ -198,6 +202,7 @@ public partial class MainForm : Form
         {
             while (_controller.IsAiTurn && !_controller.IsGameOver)
             {
+                await Task.Yield(); // пусть графический интерфейс обновит доску и не блокируется
                 bool changed = _controller.BeginAiTurnAnimation();
 
                 UpdateStatusAndParams();
