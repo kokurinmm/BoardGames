@@ -1,8 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text;
 using System.Drawing;
 using System.Linq;
+using System.Text;
+using static BoardGames.ReversiBoard;
 
 namespace BoardGames;
 
@@ -21,8 +22,8 @@ public sealed class CheckersController : IGameController
     public int BlackPieceCount => _board.Count(CheckersBoard.BLACK);
 
     public AiMode Mode { get; set; } = AiMode.AlphaBeta;
-    public int AlphaBetaDepth { get; set; } = 3;
-    public int MonteCarloSimulations { get; set; } = 25;
+    public int AlphaBetaDepth { get; set; } = 4;
+    public int MonteCarloSimulations { get; set; } = 60;
 
     public bool IsGameOver { get; private set; }
 
@@ -57,8 +58,11 @@ public sealed class CheckersController : IGameController
     /// </summary>
     private bool _mustContinueJump;
 
-    private CheckersBoard.MoveChain? _pendingAiMove; // текущий ход или цепочка ходов ИИ
-    private int _pendingAiStepIndex; // текущий шаг в цепочке ходов ИИ
+    private CheckersBoard.MoveChain? _pendingAiMove; // текущий ход или цепочка ходов ИИ, для анимации
+    private int _pendingAiStepIndex; // текущий шаг в цепочке ходов ИИ, для анимации
+
+    private int _drawCount; // текущее количество ходов только дамками без взятий, для критерия ничьи
+    private const int DRAW_NUM = 15; // количество ходов только дамками без взятий, после которого объявляется ничья
 
     public bool IsAiTurn => !IsGameOver && _turn == _aiColor;
 
@@ -76,6 +80,8 @@ public sealed class CheckersController : IGameController
         _possibleMoves.Clear();
         _mustContinueJump = false;
         GameOverMessage = null;
+
+        _drawCount = 0;
 
         _pendingAiMove = null; // на всякий случай - сброс анимации ИИ-хода
     }
@@ -179,6 +185,17 @@ public sealed class CheckersController : IGameController
             return;
 
         CheckersBoard.MoveStep step = matching[0].Steps[0];
+
+        // Если ход дамкой без взятия, увеличиваем счётчик для критерия ничьи, иначе обнуляем его
+        if (!_mustContinueJump && CheckersBoard.IsKing(_board.Grid[step.R1, step.C1]) && !step.Captured.HasValue)
+        {
+            _drawCount++;
+        }
+        else
+        {
+            _drawCount = 0;
+        }
+
         _board.ApplyStep(step);
 
         // Если это было взятие, проверяем, нужно ли продолжать цепочку
@@ -200,6 +217,7 @@ public sealed class CheckersController : IGameController
 
         _turn = _aiColor;
         CheckGameOver();
+
     }
 
     public bool BeginAiTurnAnimation()
@@ -210,7 +228,22 @@ public sealed class CheckersController : IGameController
         _pendingAiMove = FindBestAiMove();
         _pendingAiStepIndex = 0;
 
-        return _pendingAiMove is not null;
+        if (_pendingAiMove is null || _pendingAiMove.Steps.Count == 0)
+            return false;
+
+        // Если ход дамкой без взятия, увеличиваем счётчик для критерия ничьи, иначе обнуляем его
+        CheckersBoard.MoveStep firstStep = _pendingAiMove.Steps[0];
+        int startPiece = _board.Grid[firstStep.R1, firstStep.C1];
+        if (CheckersBoard.IsKing(startPiece) && !firstStep.Captured.HasValue)
+        {
+            _drawCount++;
+        }
+        else
+        {
+            _drawCount = 0;
+        }
+
+        return true;
     }
 
     public bool HasPendingAiAnimation =>
@@ -238,28 +271,24 @@ public sealed class CheckersController : IGameController
         return true;
     }
 
-    /// <summary>
-    /// Применить один ход. Используется MainForm для анимации цепочки ходов
-    /// </summary>
-    public void ApplyAiMoveStep(CheckersBoard.MoveStep step)
-    {
-        _board.ApplyStep(step);
-    }
-
-    /// <summary>
-    /// Завершить ход ИИ
-    /// </summary>
-    public void FinishAiMove()
-    {
-        _turn = CheckersBoard.Opponent(_turn);
-        CheckGameOver();
-    }
-
     public bool MakeAiTurn()
     {
         CheckersBoard.MoveChain? bestMove = FindBestAiMove();
-        if (bestMove is null)
+        if (bestMove is null || bestMove.Steps.Count == 0)
             return false;
+
+        // Если ход дамкой без взятия, увеличиваем счётчик для критерия ничьи, иначе обнуляем его
+        CheckersBoard.MoveStep firstStep = bestMove.Steps[0];
+        int startPiece = _board.Grid[firstStep.R1, firstStep.C1];
+        if (CheckersBoard.IsKing(startPiece) && !firstStep.Captured.HasValue)
+        {
+            _drawCount++;
+        }
+        else
+        {
+            _drawCount = 0;
+        }
+
 
         _board.ApplyChain(bestMove);
         _turn = CheckersBoard.Opponent(_turn);
@@ -282,9 +311,11 @@ public sealed class CheckersController : IGameController
             return null;
         }
 
+        CheckersBoard.MoveChain? move;
+
         if (Mode == AiMode.AlphaBeta)
         {
-            (double score, CheckersBoard.MoveChain? move) = AlphaBeta.Search(
+            (double score, move) = AlphaBeta.Search(
                 position: _board,
                 legalMoves: (pos, side) => pos.AllMoves(side).OrderByDescending(ch => ch.Length).ToList(),
                 applyMoveToCopy: (pos, moveChain, side) =>
@@ -302,12 +333,10 @@ public sealed class CheckersController : IGameController
                 alpha: double.NegativeInfinity,
                 beta: double.PositiveInfinity,
                 maximizingPlayer: true);
-
-            return move;
         }
         else
         {
-            return MonteCarlo.BestMove(
+            move = MonteCarlo.BestMove(
                 position: _board,
                 legalMoves: (pos, side) => pos.AllMoves(side),
                 applyMoveToCopy: (pos, moveChain) =>
@@ -320,6 +349,8 @@ public sealed class CheckersController : IGameController
                 player: _aiColor,
                 simulations: MonteCarloSimulations);
         }
+        return move;
+
     }
 
     /// <summary>
@@ -359,7 +390,14 @@ public sealed class CheckersController : IGameController
 
         List<CheckersBoard.MoveChain> moves = _board.AllMoves(_turn);
         if (moves.Count > 0)
+        {
+            if (_drawCount >= DRAW_NUM) // если слишком много ходов только дамками без взятий, ничья
+            {
+                IsGameOver = true;
+                GameOverMessage = "Ничья";
+            }
             return;
+        }
 
         IsGameOver = true;
 

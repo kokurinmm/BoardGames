@@ -323,33 +323,88 @@ public sealed class CheckersBoard
     }
 
     /// <summary>
-    /// Простейшая функция оценки позиции с точки зрения стороны rootPlayer,
-    /// если очередь хода принадлежит стороне sideToMove (шашка стоит 1, дамка 5, вражеские - то же со знаком минус)
-    /// Если у sideToMove нет ходов, это проигрыш sideToMove, и возвращается большое число M или -M.
+    /// Простая функция оценки позиции с точки зрения игрока rootPlayer,
+    /// если очередь хода принадлежит стороне sideToMove, с учётом продвижения шашек и мобильности
     /// </summary>
     public double Evaluate(int rootPlayer, int sideToMove, List<MoveChain>? moves = null, double M = 1_000_000)
     {
         moves ??= AllMoves(sideToMove);
 
         if (moves.Count == 0)
-            return sideToMove == rootPlayer ? -M : +M;
+            return sideToMove == rootPlayer ? -M : +M; // проигрыш, если некуда ходить
 
-        int score = 0;
+        int opponent = Opponent(rootPlayer);
+
+        double materialScore = 0.0;
+        double advancementScore = 0.0;
+
         for (int row = 0; row < BOARD_SIZE; row++)
+        {
             for (int col = 0; col < BOARD_SIZE; col++)
             {
                 int piece = Grid[row, col];
                 if (piece == EMPTY)
                     continue;
 
-                int value = IsKing(piece) ? 5 : 1;
-                if (PieceColor(piece) == rootPlayer)
-                    score += value;
+                int color = PieceColor(piece);
+
+                double value = IsKing(piece) ? 5.0 : 1.0; // дамка стоит 5 шашек
+                if (color == rootPlayer)
+                    materialScore += value;
                 else
-                    score -= value;
+                    materialScore -= value;
+
+                if (!IsKing(piece))
+                {
+                    // Оценка продвижения: белые идут вверх, чёрные вниз
+                    double advancement =
+                        color == WHITE
+                            ? (BOARD_SIZE - 1 - row) * 0.10
+                            : row * 0.10;
+
+                    if (color == rootPlayer)
+                        advancementScore += advancement;
+                    else
+                        advancementScore -= advancement;
+                }
+            }
+        }
+
+        // Оценка мобильности
+        int CountUniqueFirstSteps(List<MoveChain> chains)
+        {
+            HashSet<(int r1, int c1, int r2, int c2)> uniqueSteps = new();
+
+            foreach (MoveChain chain in chains)
+            {
+                if (chain.Steps.Count == 0)
+                    continue;
+
+                MoveStep first = chain.Steps[0];
+                uniqueSteps.Add((first.R1, first.C1, first.R2, first.C2));
             }
 
-        return score;
+            return uniqueSteps.Count;
+        }
+
+        int myMobility;
+        int oppMobility;
+
+        if (rootPlayer == sideToMove)
+            myMobility = CountUniqueFirstSteps(moves);
+        else
+            myMobility = CountUniqueFirstSteps(AllMoves(rootPlayer));
+
+        if (opponent == sideToMove)
+            oppMobility = CountUniqueFirstSteps(moves);
+        else
+            oppMobility = CountUniqueFirstSteps(AllMoves(opponent));
+
+        double mobilityScore = myMobility - oppMobility;
+
+        return materialScore
+             + advancementScore
+             + 0.03 * mobilityScore;
     }
 
     /// <summary>

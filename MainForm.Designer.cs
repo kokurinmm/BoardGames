@@ -104,7 +104,7 @@
             nudSims.Name = "nudSims";
             nudSims.Size = new Size(74, 31);
             nudSims.TabIndex = 5;
-            nudSims.Value = new decimal(new int[] { 50, 0, 0, 0 });
+            nudSims.Value = new decimal(new int[] { 60, 0, 0, 0 });
             // 
             // label2
             // 
@@ -118,12 +118,12 @@
             // nudDepth
             // 
             nudDepth.Location = new Point(121, 65);
-            nudDepth.Maximum = new decimal(new int[] { 7, 0, 0, 0 });
+            nudDepth.Maximum = new decimal(new int[] { 10, 0, 0, 0 });
             nudDepth.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
             nudDepth.Name = "nudDepth";
             nudDepth.Size = new Size(74, 31);
             nudDepth.TabIndex = 3;
-            nudDepth.Value = new decimal(new int[] { 3, 0, 0, 0 });
+            nudDepth.Value = new decimal(new int[] { 4, 0, 0, 0 });
             // 
             // label1
             // 
