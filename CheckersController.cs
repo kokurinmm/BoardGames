@@ -22,8 +22,8 @@ public sealed class CheckersController : IGameController
     public int BlackPieceCount => _board.Count(CheckersBoard.BLACK);
 
     public AiMode Mode { get; set; } = AiMode.AlphaBeta;
-    public int AlphaBetaDepth { get; set; } = 3;
-    public int MonteCarloSimulations { get; set; } = 25;
+    public int AlphaBetaDepth { get; set; } = 4;
+    public int MonteCarloSimulations { get; set; } = 60;
 
     public bool IsGameOver { get; private set; }
 
