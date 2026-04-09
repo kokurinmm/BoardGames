@@ -27,12 +27,13 @@ public sealed class CheckersController : IGameController
 
     public bool IsGameOver { get; private set; }
 
-    /// <summary>
-    /// Цвет пользователя для интерфейса
-    /// </summary>
     public string HumanPlayerDisplayName => Players.CheckersName(_humanColor);
 
     public string? GameOverMessage { get; private set; }
+
+    public bool HumanVsHuman { get; set; }
+
+    public string CurrentTurnDisplayName => Players.CheckersName(_turn);
 
     /// <summary>
     /// Текущая позиция на доске
@@ -64,17 +65,12 @@ public sealed class CheckersController : IGameController
     private int _drawCount; // текущее количество ходов только дамками без взятий, для критерия ничьи
     private const int DRAW_NUM = 15; // количество ходов только дамками без взятий, после которого объявляется ничья
 
-    public bool IsAiTurn => !IsGameOver && _turn == _aiColor;
+    public bool IsAiTurn => !HumanVsHuman && !IsGameOver && _turn == _aiColor;
 
     public void NewGame() // Запуск новой игры, в т.ч. случайный выбор цвета игроков
     {
         IsGameOver = false;
         _board = CheckersBoard.Initial();
-
-        _humanColor = Random.Shared.Next(2) == 0 ? CheckersBoard.WHITE : CheckersBoard.BLACK;
-        _aiColor = CheckersBoard.Opponent(_humanColor);
-
-        _turn = CheckersBoard.WHITE;
 
         _selectedPiece = null;
         _possibleMoves.Clear();
@@ -84,6 +80,11 @@ public sealed class CheckersController : IGameController
         _drawCount = 0;
 
         _pendingAiMove = null; // на всякий случай - сброс анимации ИИ-хода
+
+        _turn = CheckersBoard.WHITE; // первыми ходят белые
+
+        _humanColor = Random.Shared.Next(2) == 0 ? CheckersBoard.WHITE : CheckersBoard.BLACK;
+        _aiColor = CheckersBoard.Opponent(_humanColor);
     }
 
     public void Draw(Graphics g, Rectangle rect) // Отрисовка доски
@@ -158,15 +159,15 @@ public sealed class CheckersController : IGameController
         if (IsGameOver)
             return;
 
-        if (_turn != _humanColor)
+        if (!HumanVsHuman && _turn != _humanColor)
             return;
 
         // Если пользователь не обязан продолжать взятие, то может выбрать другую фигуру
-        if (!_mustContinueJump && CheckersBoard.IsPlayersPiece(_board.Grid[row, col], _humanColor))
+        if (!_mustContinueJump && CheckersBoard.IsPlayersPiece(_board.Grid[row, col], _turn))
         {
             _selectedPiece = (row, col);
 
-            List<CheckersBoard.MoveChain> allMoves = _board.AllMoves(_humanColor);
+            List<CheckersBoard.MoveChain> allMoves = _board.AllMoves(_turn);
             _possibleMoves = allMoves
                 .Where(m => m.Steps.Count > 0 && m.Steps[0].R1 == row && m.Steps[0].C1 == col)
                 .ToList();
@@ -215,7 +216,7 @@ public sealed class CheckersController : IGameController
         _possibleMoves.Clear();
         _mustContinueJump = false;
 
-        _turn = _aiColor;
+        _turn = CheckersBoard.Opponent(_turn);
         CheckGameOver();
 
     }
@@ -401,9 +402,19 @@ public sealed class CheckersController : IGameController
 
         IsGameOver = true;
 
-        if (_turn == _humanColor)
-            GameOverMessage = "Победил ИИ";
+        if (HumanVsHuman)
+        {
+            if (_turn == CheckersBoard.WHITE)
+                GameOverMessage = "Победили чёрные";
+            else
+                GameOverMessage = "Победили белые";
+        }
         else
-            GameOverMessage = "Вы победили!";
+        {
+            if (_turn == _humanColor)
+                GameOverMessage = "Победил ИИ";
+            else
+                GameOverMessage = "Вы победили!";
+        }
     }
 }

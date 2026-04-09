@@ -13,12 +13,16 @@ public partial class MainForm : Form
 
     private bool _aiLoopRunning; // выполняется асинхронный цикл (чтобы не запустилось два сразу)
 
+    private bool _playWithoutAi; // игра без ИИ
+
     public MainForm()
     {
         InitializeComponent();
 
         _controller = CreateControllerForSelectedGame(); // создаём контроллер для выбранной по умолчанию игры
-        
+
+        _controller.HumanVsHuman = _playWithoutAi; // по умолчанию false, так что первая игра будет с ИИ
+
         InitializeBoardView(); // подключаем BoardView к панели
 
         BindUiEvents(); // подписка на события компонентов формы
@@ -32,6 +36,21 @@ public partial class MainForm : Form
         UpdateStatusAndParams(); // обновление надписи о цвете игрока
 
         _ = MaybeRunAiLoopAsync(); // если игра начинается с хода ИИ
+    }
+
+    /// <summary>
+    /// Запустить новую игру в выбранном режиме (с ИИ или без ИИ)
+    /// </summary>
+    private void StartNewGame(bool withAi)
+    {
+        _playWithoutAi = !withAi;
+
+        _controller.HumanVsHuman = _playWithoutAi;
+        _controller.NewGame();
+
+        UpdateStatusAndParams();
+        _boardView.Refresh();
+        _ = MaybeRunAiLoopAsync();
     }
 
     private void InitializeBoardView()
@@ -93,10 +112,13 @@ public partial class MainForm : Form
         // щелчок на кнопке новой игры
         btnNewGame.Click += (_, __) =>
         {
-            _controller.NewGame();
-            UpdateStatusAndParams();
-            _boardView.Refresh(); // доска требует перерисовки
-            _ = MaybeRunAiLoopAsync(); // если очередь хода ИИ
+            StartNewGame(withAi: true);
+        };
+
+        // щелчок на кнопке игры без ИИ
+        btnNoAiGame.Click += (_, __) =>
+        {
+            StartNewGame(withAi: false);
         };
     }
 
@@ -171,8 +193,16 @@ public partial class MainForm : Form
         UpdateAiParamsFromUi();
         rbAlphaBeta.Checked = _controller.Mode == AiMode.AlphaBeta;
         rbMonteCarlo.Checked = _controller.Mode == AiMode.MonteCarlo;
-        lblStatus.Text = "Вы: " + _controller.HumanPlayerDisplayName;
+
+        if (_controller.HumanVsHuman)
+            lblStatus.Text = "Ход: " + _controller.CurrentTurnDisplayName;
+        else
+            lblStatus.Text = "Вы: " + _controller.HumanPlayerDisplayName;
+
         Text = $"{_controller.GameDisplayName} — Белые: {_controller.WhitePieceCount}, Чёрные: {_controller.BlackPieceCount}";
+
+        groupBox2.Enabled = !_controller.HumanVsHuman; // заблокировать переключатели ИИ, если игра без ИИ
+
     }
 
     /// <summary>
@@ -181,6 +211,7 @@ public partial class MainForm : Form
     private void SwitchGame()
     {
         _controller = CreateControllerForSelectedGame();
+        _controller.HumanVsHuman = _playWithoutAi;
         ApplyControllerToBoardView();
         LoadDefaultsFromController();
         _controller.NewGame();
@@ -240,8 +271,6 @@ public partial class MainForm : Form
             _aiLoopRunning = false;
         }
     }
-
-
 
     /// <summary>
     /// Показать окно об окончании игры
