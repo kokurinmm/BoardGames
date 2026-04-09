@@ -24,12 +24,13 @@ public sealed class ReversiController : IGameController
 
     public bool IsGameOver { get; private set; }
 
-    /// <summary>
-    /// Цвет пользователя для интерфейса
-    /// </summary>
     public string HumanPlayerDisplayName => Players.ReversiName(_humanColor);
 
     public string? GameOverMessage { get; private set; }
+
+    public bool HumanVsHuman { get; set; }
+
+    public string CurrentTurnDisplayName => Players.ReversiName(_turn);
 
     /// <summary>
     /// Текущая позиция на доске
@@ -43,7 +44,7 @@ public sealed class ReversiController : IGameController
     private ReversiBoard.Move? _pendingAiMove; // текущий ход ИИ
     private bool _hasPendingAiMove; // выполнен ли уже найденный ход
 
-    public bool IsAiTurn => !IsGameOver && _turn == _aiColor;
+    public bool IsAiTurn => !HumanVsHuman && !IsGameOver && _turn == _aiColor;
 
     public void NewGame() // запуск новой игры, в т.ч. случайный выбор цвета игроков
     {
@@ -52,13 +53,13 @@ public sealed class ReversiController : IGameController
 
         _turn = ReversiBoard.BLACK; // в реверси первый ход принадлежит чёрным
 
-        _humanColor = Random.Shared.Next(2) == 0 ? ReversiBoard.BLACK : ReversiBoard.WHITE;
-        _aiColor = ReversiBoard.Opponent(_humanColor);
-
         GameOverMessage = null;
 
         _pendingAiMove = null; // на всякий случай - сброс анимации ИИ-хода
         _hasPendingAiMove = false;
+
+        _humanColor = Random.Shared.Next(2) == 0 ? ReversiBoard.BLACK : ReversiBoard.WHITE;
+        _aiColor = ReversiBoard.Opponent(_humanColor);
 
     }
 
@@ -118,7 +119,7 @@ public sealed class ReversiController : IGameController
         if (IsGameOver)
             return;
 
-        if (_turn != _humanColor)
+        if (!HumanVsHuman && _turn != _humanColor)
             return;
 
         var legalMoves = _board.ValidMoves(_turn);
@@ -279,6 +280,21 @@ public sealed class ReversiController : IGameController
 
     private void SetGameOverMessage()
     {
+        if (HumanVsHuman)
+        {
+            int whiteCount = _board.Count(ReversiBoard.WHITE);
+            int blackCount = _board.Count(ReversiBoard.BLACK);
+
+            if (whiteCount > blackCount)
+                GameOverMessage = "Победили белые";
+            else if (whiteCount < blackCount)
+                GameOverMessage = "Победили чёрные";
+            else
+                GameOverMessage = "Ничья";
+
+            return;
+        }
+
         int humanCount = _board.Count(_humanColor);
         int aiCount = _board.Count(_aiColor);
 

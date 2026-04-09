@@ -28,6 +28,10 @@ public sealed class TestController : IGameController
 
     public string? GameOverMessage => null;
 
+    public bool HumanVsHuman { get; set; } = false;
+
+    public string CurrentTurnDisplayName => Players.CheckersName(HumanPlayer);
+
     // последняя клетка, по которой щёлкнул пользователь
     private int _lastRow = -1;
     private int _lastCol = -1;

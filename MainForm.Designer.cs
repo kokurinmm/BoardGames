@@ -41,6 +41,7 @@
             lblStatus = new Label();
             pnlBoard = new Panel();
             btnNewGame = new Button();
+            btnNoAiGame = new Button();
             groupBox1.SuspendLayout();
             groupBox2.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)nudSims).BeginInit();
@@ -169,26 +170,35 @@
             // 
             // pnlBoard
             // 
-            pnlBoard.Dock = DockStyle.Right;
-            pnlBoard.Location = new Point(330, 0);
+            pnlBoard.Location = new Point(300, 0);
             pnlBoard.Name = "pnlBoard";
-            pnlBoard.Size = new Size(480, 480);
+            pnlBoard.Size = new Size(520, 528);
             pnlBoard.TabIndex = 3;
             // 
             // btnNewGame
             // 
-            btnNewGame.Location = new Point(14, 426);
+            btnNewGame.Location = new Point(12, 426);
             btnNewGame.Name = "btnNewGame";
-            btnNewGame.Size = new Size(259, 34);
+            btnNewGame.Size = new Size(261, 34);
             btnNewGame.TabIndex = 4;
             btnNewGame.Text = "Новая игра";
             btnNewGame.UseVisualStyleBackColor = true;
+            // 
+            // btnNoAiGame
+            // 
+            btnNoAiGame.Location = new Point(12, 479);
+            btnNoAiGame.Name = "btnNoAiGame";
+            btnNoAiGame.Size = new Size(261, 34);
+            btnNoAiGame.TabIndex = 5;
+            btnNoAiGame.Text = "Играть без ИИ";
+            btnNoAiGame.UseVisualStyleBackColor = true;
             // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(10F, 25F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(810, 480);
+            ClientSize = new Size(821, 529);
+            Controls.Add(btnNoAiGame);
             Controls.Add(btnNewGame);
             Controls.Add(pnlBoard);
             Controls.Add(lblStatus);
@@ -222,5 +232,6 @@
         private Label lblStatus;
         private Panel pnlBoard;
         private Button btnNewGame;
+        private Button btnNoAiGame;
     }
 }
