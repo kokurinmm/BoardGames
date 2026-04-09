@@ -58,6 +58,7 @@ public sealed class ReversiController : IGameController
         _pendingAiMove = null; // на всякий случай - сброс анимации ИИ-хода
         _hasPendingAiMove = false;
 
+        // Для игры с ИИ - случайный выбор цветов игроков
         _humanColor = Random.Shared.Next(2) == 0 ? ReversiBoard.BLACK : ReversiBoard.WHITE;
         _aiColor = ReversiBoard.Opponent(_humanColor);
 

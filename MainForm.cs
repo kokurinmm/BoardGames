@@ -195,7 +195,10 @@ public partial class MainForm : Form
         rbMonteCarlo.Checked = _controller.Mode == AiMode.MonteCarlo;
 
         if (_controller.HumanVsHuman)
-            lblStatus.Text = "Ход: " + _controller.CurrentTurnDisplayName;
+        {
+            if (!_controller.IsGameOver)
+                lblStatus.Text = "Ход: " + _controller.CurrentTurnDisplayName;
+        }
         else
             lblStatus.Text = "Вы: " + _controller.HumanPlayerDisplayName;
 

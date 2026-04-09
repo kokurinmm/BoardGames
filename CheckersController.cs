@@ -83,6 +83,7 @@ public sealed class CheckersController : IGameController
 
         _turn = CheckersBoard.WHITE; // первыми ходят белые
 
+        // Для игры с ИИ - случайный выбор цветов игроков
         _humanColor = Random.Shared.Next(2) == 0 ? CheckersBoard.WHITE : CheckersBoard.BLACK;
         _aiColor = CheckersBoard.Opponent(_humanColor);
     }
