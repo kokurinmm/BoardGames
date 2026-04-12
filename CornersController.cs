@@ -166,18 +166,19 @@ public sealed class CornersController : IGameController
             float w = cell - 3.5f;
             float h = cell - 3.5f;
 
-            using Pen selectionPen = new Pen(_jumpContinuationMode ? Color.DarkOrange : Color.DarkBlue, 3);
+            using Pen selectionPen = new Pen(Color.DarkBlue, 3);
             selectionPen.Alignment = System.Drawing.Drawing2D.PenAlignment.Inset;
             g.DrawRectangle(selectionPen, x1, y1, w, h);
 
-            // Отмечаем возможные ходы, в т.ч. саму выбранную шашку - щелчок на ней завершает серию прыжков
-            if (_jumpContinuationMode)
+            // Если есть варианты, отмечаем возможные ходы и саму выбранную шашку - щелчок на ней завершает серию прыжков
+            if (_jumpContinuationMode && _possibleMoves.Count > 0)
             {
                 float cx = rect.Left + selectedCol * cell + cell / 2.0f;
                 float cy = rect.Top + selectedRow * cell + cell / 2.0f;
-                float radius = cell * 0.12f;
-                using Pen stopRing = new Pen(Color.OrangeRed, 3);
-                g.DrawEllipse(stopRing, cx - radius, cy - radius, 2 * radius, 2 * radius);
+                float radius = cell * 0.18f;
+
+                using SolidBrush dot = new SolidBrush(Color.FromArgb(150, Color.LimeGreen));
+                g.FillEllipse(dot, cx - radius, cy - radius, 2 * radius, 2 * radius);
             }
 
             foreach (CornersBoard.MoveChain chain in _possibleMoves)
@@ -190,7 +191,7 @@ public sealed class CornersController : IGameController
                 float cy = rect.Top + first.R2 * cell + cell / 2.0f;
                 float radius = cell * 0.18f;
 
-                using SolidBrush dot = new SolidBrush(Color.FromArgb(150, _jumpContinuationMode ? Color.Orange : Color.Green));
+                using SolidBrush dot = new SolidBrush(Color.FromArgb(150, Color.Green));
                 g.FillEllipse(dot, cx - radius, cy - radius, 2 * radius, 2 * radius);
             }
         }
@@ -246,8 +247,14 @@ public sealed class CornersController : IGameController
 
         if (step.IsJump)
         {
-            // после прыжка можно либо продолжить цепочку, либо остановиться
-            List<CornersBoard.MoveChain> continuations = _board.JumpSequencesFrom(row, col);
+            // На уже посещённые клетки нельзя возвращаться в течение того же самого прыжка
+            // Если допустимых продолжений нет, ход завершается
+
+            HashSet<CornersBoard.Square> visited = VisitedSquares();
+
+            List<CornersBoard.MoveChain> continuations =
+                _board.JumpSequencesFrom(row, col, currentSequence: null, visitedLandings: visited);
+
             if (continuations.Count > 0)
             {
                 _selectedPiece = (row, col);
@@ -293,6 +300,22 @@ public sealed class CornersController : IGameController
         }
 
         return true;
+    }
+
+    private HashSet<CornersBoard.Square> VisitedSquares() // уже посещённые клетки в текущем прыжке
+    {
+        HashSet<CornersBoard.Square> visited = new();
+
+        if (_executedTurn is null || _executedTurn.Steps.Count == 0)
+            return visited;
+
+        CornersBoard.MoveStep first = _executedTurn.Steps[0];
+        visited.Add(new CornersBoard.Square(first.R1, first.C1));
+
+        foreach (CornersBoard.MoveStep step in _executedTurn.Steps)
+            visited.Add(new CornersBoard.Square(step.R2, step.C2));
+
+        return visited;
     }
 
     private void AppendExecutedStep(CornersBoard.MoveStep step)
