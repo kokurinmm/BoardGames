@@ -339,7 +339,7 @@ public sealed class CornersBoard
     /// <summary>
     /// Обновить информацию для антиничейных правил после полного хода
     /// </summary>
-    private void UpdateAfterFullMove(MoveChain chain, int player)
+    public void UpdateAfterFullMove(MoveChain chain, int player)
     {
         if (player == WHITE)
         {
@@ -405,7 +405,7 @@ public sealed class CornersBoard
         return total;
     }
 
-    public int Count(int player) => PIECES_PER_PLAYER; // количество фишек у каждого игрока всегда одинаково
+    public int Count(int player) => CountInGoalHome(player); // в уголках счёт - это сколько фишек у цели, а не сколько всего
 
     /// <summary>
     /// Кто победил

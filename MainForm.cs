@@ -77,6 +77,12 @@ public partial class MainForm : Form
                 SwitchGame();
         };
 
+        rbCorners.CheckedChanged += (_, __) =>
+        {
+            if (rbCorners.Checked)
+                SwitchGame();
+        };
+
         // переключение между алгоритмами ИИ.
         rbAlphaBeta.CheckedChanged += (_, __) =>
         {
@@ -127,11 +133,24 @@ public partial class MainForm : Form
     /// </summary>
     private IGameController CreateControllerForSelectedGame()
     {
-        GameKind kind = rbCheckers.Checked ? GameKind.Checkers : GameKind.Reversi;
+        GameKind kind;
 
-        return kind == GameKind.Checkers
-            ? new CheckersController()
-            : new ReversiController();
+        if (rbCheckers.Checked)
+            kind = GameKind.Checkers;
+        else if (rbReversi.Checked)
+            kind = GameKind.Reversi;
+        else if (rbCorners.Checked)
+            kind = GameKind.Corners;
+        else
+            kind = GameKind.Checkers;
+
+        return kind switch
+        {
+            GameKind.Checkers => new CheckersController(),
+            GameKind.Reversi => new ReversiController(),
+            GameKind.Corners => new CornersController(),
+            _ => new CheckersController()
+        };
     }
 
     /// <summary>
