@@ -425,9 +425,7 @@ public sealed class CornersController : IGameController
 
         while (true)
         {
-            if (simulation.HasBuiltGoalHouse(CornersBoard.WHITE) ||
-                simulation.HasBuiltGoalHouse(CornersBoard.BLACK) ||
-                simulation.BlackMovesPlayed >= CornersBoard.BLACK_MOVE_LIMIT)
+            if (simulation.IsTerminal())
             {
                 return CornersTerminalScore(simulation, player);
             }
@@ -504,6 +502,20 @@ public sealed class CornersController : IGameController
             IsGameOver = true;
             SetWinnerMessage(movedPlayer);
             return true;
+        }
+
+        if (_board.BlackMovesPlayed == CornersBoard.HOME_EXIT_LIMIT)
+        {
+            int? DeadlineWinner = _board.GetDeadlineWinner();
+            if (DeadlineWinner is not null)
+            {
+                IsGameOver = true;
+                if (DeadlineWinner == CornersBoard.EMPTY)
+                    SetWinnerMessage(null);
+                else
+                    SetWinnerMessage(DeadlineWinner);
+                return true;
+            }
         }
 
         if (_board.BlackMovesPlayed >= CornersBoard.BLACK_MOVE_LIMIT)

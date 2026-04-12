@@ -22,6 +22,7 @@ public sealed class CornersBoard
 
     public const int BLACK_MOVE_LIMIT = 80; // на 80-м ходе чёрных партия принудительно завершается
     public const int MIRROR_LIMIT = 10; // чёрным разрешено копировать первые 10 ходов белых
+    public const int HOME_EXIT_LIMIT = 40; // за 40 ходов игроки обязаны вывести все фишки из своих домов
 
     private static readonly (int dr, int dc)[] DIRECTIONS =
     {
@@ -388,10 +389,14 @@ public sealed class CornersBoard
     /// <summary>
     /// Наступил ли конец игры
     /// </summary>
-    public bool IsTerminal() =>
-        HasBuiltGoalHouse(WHITE) ||
-        HasBuiltGoalHouse(BLACK) ||
-        BlackMovesPlayed >= BLACK_MOVE_LIMIT;
+    public bool IsTerminal()
+    {
+        return
+            HasBuiltGoalHouse(WHITE) ||
+            HasBuiltGoalHouse(BLACK) ||
+            GetDeadlineWinner() is not null ||
+            BlackMovesPlayed >= BLACK_MOVE_LIMIT;
+    }
 
     /// <summary>
     /// Выиграл ли игрок, полностью заняв дом соперника
@@ -441,6 +446,15 @@ public sealed class CornersBoard
         if (HasBuiltGoalHouse(BLACK))
             return BLACK;
 
+        int? DeadlineWinner = GetDeadlineWinner();
+        if (DeadlineWinner is not null)
+        {
+            if (DeadlineWinner == EMPTY)
+                return null;
+            else
+                return DeadlineWinner;
+        }
+
         if (BlackMovesPlayed >= BLACK_MOVE_LIMIT)
         {
             int whiteInGoal = CountInGoalHome(WHITE);
@@ -452,6 +466,41 @@ public sealed class CornersBoard
                 return BLACK;
             return null;
         }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Нарушил ли игрок правило "за 40 ходов вывести все шашки из своего дома"
+    /// </summary>
+    public bool FailedHomeExitDeadline(int player)
+    {
+        int movesPlayed = player == WHITE ? WhiteMovesPlayed : BlackMovesPlayed;
+        return movesPlayed >= HOME_EXIT_LIMIT && CountInOwnHome(player) > 0;
+    }
+
+    /// <summary>
+    /// Игрок, победивший из-за того, что соперник не успел вывести фишки из своего дома за 40 ходов
+    /// Если оба не успели, возвращается EMPTY - это ничья
+    /// Если игра не закончилась из-за дедлайна по выводу фишек, возвращается null
+    /// </summary>
+    /// <returns></returns>
+    public int? GetDeadlineWinner()
+    {
+        if (BlackMovesPlayed < HOME_EXIT_LIMIT)
+            return null;
+
+        bool whiteFailed = CountInOwnHome(WHITE) > 0;
+        bool blackFailed = CountInOwnHome(BLACK) > 0;
+
+        if (whiteFailed && blackFailed)
+            return EMPTY;
+
+        if (whiteFailed)
+            return BLACK;
+
+        if (blackFailed)
+            return WHITE;
 
         return null;
     }
@@ -563,21 +612,13 @@ public sealed class CornersBoard
     {
         generatedMoves ??= AllMoves(sideToMove);
 
-        if (HasBuiltGoalHouse(rootPlayer))
-            return +M;
-
-        if (HasBuiltGoalHouse(Opponent(rootPlayer)))
-            return -M;
-
-        if (BlackMovesPlayed >= BLACK_MOVE_LIMIT)
+        if (IsTerminal())
         {
-            int whiteInGoal = CountInGoalHome(WHITE);
-            int blackInGoal = CountInGoalHome(BLACK);
+            int? winner = GetWinner();
 
-            if (whiteInGoal == blackInGoal)
+            if (winner is null)
                 return 0.0;
 
-            int winner = whiteInGoal > blackInGoal ? WHITE : BLACK;
             return winner == rootPlayer ? +M : -M;
         }
 
