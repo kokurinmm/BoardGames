@@ -29,6 +29,7 @@
         private void InitializeComponent()
         {
             groupBox1 = new GroupBox();
+            rbCorners = new RadioButton();
             rbReversi = new RadioButton();
             rbCheckers = new RadioButton();
             groupBox2 = new GroupBox();
@@ -50,6 +51,7 @@
             // 
             // groupBox1
             // 
+            groupBox1.Controls.Add(rbCorners);
             groupBox1.Controls.Add(rbReversi);
             groupBox1.Controls.Add(rbCheckers);
             groupBox1.Location = new Point(12, 12);
@@ -58,6 +60,17 @@
             groupBox1.TabIndex = 0;
             groupBox1.TabStop = false;
             groupBox1.Text = "Игра";
+            // 
+            // rbCorners
+            // 
+            rbCorners.AutoSize = true;
+            rbCorners.Location = new Point(135, 73);
+            rbCorners.Name = "rbCorners";
+            rbCorners.Size = new Size(93, 29);
+            rbCorners.TabIndex = 2;
+            rbCorners.TabStop = true;
+            rbCorners.Text = "Уголки";
+            rbCorners.UseVisualStyleBackColor = true;
             // 
             // rbReversi
             // 
@@ -233,5 +246,6 @@
         private Panel pnlBoard;
         private Button btnNewGame;
         private Button btnNoAiGame;
+        private RadioButton rbCorners;
     }
 }

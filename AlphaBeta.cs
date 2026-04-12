@@ -32,10 +32,8 @@ public static class AlphaBeta
         int sideToMove = maximizingPlayer ? rootPlayer : opponent(rootPlayer);
         List<TMove> moves = legalMoves(position, sideToMove);
 
-        if (depth == 0 || isTerminal(position, sideToMove))
-        {
+        if (depth == 0 || isTerminal(position, sideToMove) || (!canPass && moves.Count == 0))
             return (evaluate(position, rootPlayer, sideToMove, moves), null);
-        }
 
         if (moves.Count == 0 && canPass)
         {
