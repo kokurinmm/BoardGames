@@ -212,7 +212,7 @@ public sealed class CornersBoard
     /// Расстояние от клетки до цели
     /// </summary>
     public int DistanceToGoal(int player, int row, int col) =>
-        player == WHITE ? DistanceToBlackGoal[row, col] : DistanceToWhiteGoal[row, col];
+        player == WHITE ? DistanceToWhiteGoal[row, col] : DistanceToBlackGoal[row, col];
 
     /// <summary>
     /// Получить все допустимые ходы игрока, с учётом ограничения на 11-й зеркальный ход чёрных
