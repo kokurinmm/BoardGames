@@ -39,8 +39,6 @@ public sealed class CornersBoard
     public int WhiteMovesPlayed { get; private set; } // количество сделанных ходов белыми и чёрными, для дополнительных правил
     public int BlackMovesPlayed { get; private set; }
 
-    public int MirrorCount { get; private set; } // сколько раз чёрные в точности повторили ход белых
-
     public bool MirrorBroken { get; private set; } // зеркальное поведение чёрных нарушено
 
     private MoveChain? _lastWhiteMove; // последний ход белых - для проверки зеркального повторения чёрными
@@ -153,7 +151,6 @@ public sealed class CornersBoard
 
         board.WhiteMovesPlayed = WhiteMovesPlayed;
         board.BlackMovesPlayed = BlackMovesPlayed;
-        board.MirrorCount = MirrorCount;
         board.MirrorBroken = MirrorBroken;
         board._lastWhiteMove = _lastWhiteMove?.Clone();
 
@@ -218,11 +215,18 @@ public sealed class CornersBoard
         player == WHITE ? DistanceToBlackGoal[row, col] : DistanceToWhiteGoal[row, col];
 
     /// <summary>
-    /// Получить все допустимые ходы игрока
+    /// Получить все допустимые ходы игрока, с учётом ограничения на 11-й зеркальный ход чёрных
     /// </summary>
     public List<MoveChain> AllMoves(int player)
     {
         List<MoveChain> moves = new();
+
+        Square requiredStart = default;
+        Square forbiddenLanding = default;
+
+        bool hasMirrorRestriction =
+            player == BLACK &&
+            GetMirrorRestriction(out requiredStart, out forbiddenLanding);
 
         for (int row = 0; row < BOARD_SIZE; row++)
             for (int col = 0; col < BOARD_SIZE; col++)
@@ -230,21 +234,23 @@ public sealed class CornersBoard
                 if (!IsPlayersPiece(Grid[row, col], player))
                     continue;
 
-                moves.AddRange(SlidesFrom(row, col));
-                moves.AddRange(JumpSequencesFrom(row, col));
-            }
+                Square? forbiddenSquare = null;
 
-        if (player == BLACK)
-            ApplyMirrorRestriction(moves);
+                if (hasMirrorRestriction && row == requiredStart.R && col == requiredStart.C)
+                    forbiddenSquare = forbiddenLanding;
+
+                moves.AddRange(SlidesFrom(row, col, forbiddenSquare));
+                moves.AddRange(JumpSequencesFrom(row, col, forbiddenSquare: forbiddenSquare));
+            }
 
         return moves;
     }
 
 
     /// <summary>
-    /// Список простых шагов из заданной клетки на соседнюю пустую клетку
+    /// Список простых шагов из заданной клетки на соседнюю пустую клетку, с учётом возможной запрещённой клетки
     /// </summary>
-    public List<MoveChain> SlidesFrom(int row, int col)
+    public List<MoveChain> SlidesFrom(int row, int col, Square? forbiddenSquare = null)
     {
         List<MoveChain> result = new();
 
@@ -258,6 +264,10 @@ public sealed class CornersBoard
             if (!InBounds(nr, nc) || Grid[nr, nc] != EMPTY)
                 continue;
 
+            if (forbiddenSquare is Square forbidden &&
+                nr == forbidden.R && nc == forbidden.C)
+                continue;
+
             result.Add(new MoveChain(new[] { new MoveStep(row, col, nr, nc) }));
         }
 
@@ -266,18 +276,24 @@ public sealed class CornersBoard
 
     /// <summary>
     /// Найти все цепочки прыжков для шашки из клетки (row, col).
-    /// Остановка после любого прыжка разрешена, прыжки не должны быть зацикленными
+    /// Остановка после любого прыжка разрешена, нельзя повторно посещать visited, нельзя ходить на forbidden.
+    /// Для каждой конечной клетки сохраняется только одна цепочка ходов.
     /// </summary>
     public List<MoveChain> JumpSequencesFrom(
         int row,
         int col,
         List<MoveStep>? currentSequence = null,
-        HashSet<Square>? visitedLandings = null)
+        HashSet<Square>? visitedSquares = null,
+        Square? forbiddenSquare = null)
     {
         currentSequence ??= new List<MoveStep>();
-        visitedLandings ??= new HashSet<Square> { new Square(row, col) };
+        visitedSquares ??= new HashSet<Square> { new Square(row, col) };
 
-        List<MoveChain> allChains = new();
+        Dictionary<Square, MoveChain> bestByLanding = new();
+
+        int piece = Grid[row, col];
+        if (piece == EMPTY)
+            return new List<MoveChain>();
 
         foreach ((int dr, int dc) in DIRECTIONS)
         {
@@ -293,26 +309,38 @@ public sealed class CornersBoard
                 continue;
 
             Square landing = new Square(landRow, landCol);
-            if (visitedLandings.Contains(landing))
-                continue; // зацикливание запрещено
 
-            CornersBoard temp = Copy();
-            int piece = temp.Grid[row, col];
-            temp.Grid[row, col] = EMPTY;
-            temp.Grid[landRow, landCol] = piece;
+            if (visitedSquares.Contains(landing))
+                continue;
+
+            if (forbiddenSquare is Square forbidden && // если forbiddenSquare не null, называем его forbidden
+                landing.R == forbidden.R && landing.C == forbidden.C)
+                continue;
 
             MoveStep step = new MoveStep(row, col, landRow, landCol);
+
             List<MoveStep> nextSequence = new(currentSequence);
             nextSequence.Add(step);
 
-            // Остановить цепочку прыжков можно в любой момент
-            allChains.Add(new MoveChain(nextSequence));
+            SaveChain(bestByLanding, new MoveChain(nextSequence));
 
-            HashSet<Square> nextVisited = new(visitedLandings) { landing };
-            allChains.AddRange(temp.JumpSequencesFrom(landRow, landCol, nextSequence, nextVisited));
+            // Рекурсивно продолжаем цепочку, но без Copy(): делаем ход временно и откатываем назад
+            Grid[row, col] = EMPTY;
+            Grid[landRow, landCol] = piece;
+
+            HashSet<Square> nextVisited = new(visitedSquares) { landing };
+
+            List<MoveChain> deeperChains =
+                JumpSequencesFrom(landRow, landCol, nextSequence, nextVisited, forbiddenSquare);
+
+            foreach (MoveChain chain in deeperChains)
+                SaveChain(bestByLanding, chain);
+
+            Grid[landRow, landCol] = EMPTY;
+            Grid[row, col] = piece;
         }
 
-        return allChains;
+        return bestByLanding.Values.ToList();
     }
 
     /// <summary>
@@ -352,13 +380,8 @@ public sealed class CornersBoard
         {
             BlackMovesPlayed++;
 
-            if (!MirrorBroken && _lastWhiteMove is not null)
-            {
-                if (IsMirror(chain))
-                    MirrorCount++;
-                else
-                    MirrorBroken = true;
-            }
+            if (!MirrorBroken && _lastWhiteMove is not null && !IsMirror(chain))
+                MirrorBroken = true;
         }
     }
 
@@ -434,46 +457,87 @@ public sealed class CornersBoard
     }
 
     /// <summary>
+    /// Сохраняет в словарь не более одной цепочки для каждой конечной клетки.
+    /// Если уже есть цепочка, ведущая в ту же клетку, оставляем более короткую (незачем хранить длинные).
+    /// Для уголков, в отличие от шашек, неважно, какими конкретно прыжками фишка попала в конечную позицию.
+    /// </summary>
+    private static void SaveChain(Dictionary<Square, MoveChain> map, MoveChain chain)
+    {
+        if (chain.Steps.Count == 0)
+            return;
+
+        MoveStep last = chain.Steps[^1];
+        Square landing = new Square(last.R2, last.C2);
+
+        if (!map.TryGetValue(landing, out MoveChain? existing) || chain.Steps.Count < existing.Steps.Count)
+            map[landing] = chain;
+    }
+
+    /// <summary>
     /// Повторяет ли ход чёрных зеркально соответствующий ход белых
+    /// (смотрим только на начало и конец хода, промежуточная цепочка неважна)
     /// </summary>
     private bool IsMirror(MoveChain blackMove)
     {
         if (_lastWhiteMove is null)
             return false;
 
-        if (blackMove.Steps.Count != _lastWhiteMove.Steps.Count)
+        if (_lastWhiteMove.Steps.Count == 0 || blackMove.Steps.Count == 0)
             return false;
 
-        for (int i = 0; i < _lastWhiteMove.Steps.Count; i++)
-        {
-            MoveStep w = _lastWhiteMove.Steps[i];
-            MoveStep b = blackMove.Steps[i];
+        MoveStep whiteFirst = _lastWhiteMove.Steps[0];
+        MoveStep whiteLast = _lastWhiteMove.Steps[^1];
 
-            Square wFrom = MirrorByCenter(new Square(w.R1, w.C1));
-            Square wTo = MirrorByCenter(new Square(w.R2, w.C2));
+        MoveStep blackFirst = blackMove.Steps[0];
+        MoveStep blackLast = blackMove.Steps[^1];
 
-            if (b.R1 != wFrom.R || b.C1 != wFrom.C || b.R2 != wTo.R || b.C2 != wTo.C)
-                return false;
-        }
+        Square mirroredWhiteStart = MirrorByCenter(new Square(whiteFirst.R1, whiteFirst.C1));
+        Square mirroredWhiteEnd = MirrorByCenter(new Square(whiteLast.R2, whiteLast.C2));
+
+        return
+            blackFirst.R1 == mirroredWhiteStart.R &&
+            blackFirst.C1 == mirroredWhiteStart.C &&
+            blackLast.R2 == mirroredWhiteEnd.R &&
+            blackLast.C2 == mirroredWhiteEnd.C;
+    }
+
+    /// <summary>
+    /// Если должно сработать ограничение на 11-й зеркальный ход чёрных,
+    /// возвращает запрещаемые начало и конец для хода чёрных
+    /// </summary>
+    public bool GetMirrorRestriction(out Square requiredStart, out Square forbiddenLanding)
+    {
+        requiredStart = default;
+        forbiddenLanding = default;
+
+        if (MirrorBroken)
+            return false;
+
+        if (BlackMovesPlayed != MIRROR_LIMIT)
+            return false;
+
+        if (_lastWhiteMove is null || _lastWhiteMove.Steps.Count == 0)
+            return false;
+
+        MoveStep whiteFirst = _lastWhiteMove.Steps[0];
+        MoveStep whiteLast = _lastWhiteMove.Steps[^1];
+
+        requiredStart = MirrorByCenter(new Square(whiteFirst.R1, whiteFirst.C1));
+        forbiddenLanding = MirrorByCenter(new Square(whiteLast.R2, whiteLast.C2));
 
         return true;
     }
 
     /// <summary>
-    /// Применить дебютное правило: 11-е зеркальное повторение хода белых недоступно для чёрных
+    /// Попадает ли цепочка chain хотя бы на одном шаге на клетку target
     /// </summary>
-    private void ApplyMirrorRestriction(List<MoveChain> blackMoves)
+    private static bool ChainTouches(MoveChain chain, Square target)
     {
-        if (MirrorBroken)
-            return;
+        foreach (MoveStep step in chain.Steps)
+            if (step.R2 == target.R && step.C2 == target.C)
+                return true;
 
-        if (MirrorCount != MIRROR_LIMIT)
-            return;
-
-        if (BlackMovesPlayed != MIRROR_LIMIT)
-            return;
-
-        blackMoves.RemoveAll(IsMirror);
+        return false;
     }
 
     /// <summary>
@@ -538,11 +602,13 @@ public sealed class CornersBoard
         int myPositional = PositionalMatrixScore(rootPlayer);
         int oppPositional = PositionalMatrixScore(opponent);
 
-        const double wGoal = 120.0;
-        const double wOwnHome = 12.0;
-        const double wDistance = 4.0;
-        const double wLagging = 8.0;
-        const double wPositional = 1.0;
+        double phase = Math.Min(1.0, BlackMovesPlayed / 40.0);
+
+        double wGoal = 8.0 + 24.0 * phase;
+        double wOwnHome = 32.0;
+        double wDistance = 8.0;
+        double wLagging = 16.0;
+        double wPositional = 1.0;
 
         double score = 0.0;
 

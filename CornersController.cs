@@ -59,6 +59,11 @@ public sealed class CornersController : IGameController
     /// </summary>
     private CornersBoard.MoveChain? _executedTurn;
 
+    /// <summary>
+    /// Клетка, запрещённая для хода ограничением на зеркальное повторение ходов
+    /// </summary>
+    private CornersBoard.Square? _mirrorForbiddenSquare;
+
     private CornersBoard.MoveChain? _pendingAiMove; // текущий ход ИИ, для анимации
     private int _pendingAiStepIndex; // текущий шаг в ходе ИИ, для анимации
 
@@ -78,6 +83,7 @@ public sealed class CornersController : IGameController
         _executedTurn = null;
 
         _pendingAiMove = null;
+        _mirrorForbiddenSquare = null;
 
         // _humanColor и _aiColor используются только в режиме игры с ИИ
         _humanColor = Random.Shared.Next(2) == 0 ? CornersBoard.WHITE : CornersBoard.BLACK;
@@ -223,11 +229,20 @@ public sealed class CornersController : IGameController
         {
             _selectedPiece = (row, col);
             _executedTurn = null;
+            _mirrorForbiddenSquare = null;
+
+            if (_turn == CornersBoard.BLACK &&
+                _board.GetMirrorRestriction(out CornersBoard.Square requiredStart, out CornersBoard.Square forbiddenLanding) &&
+                row == requiredStart.R && col == requiredStart.C)
+            {
+                _mirrorForbiddenSquare = forbiddenLanding;
+            }
 
             List<CornersBoard.MoveChain> allMoves = _board.AllMoves(_turn);
             _possibleMoves = allMoves
                 .Where(move => move.Steps.Count > 0 && move.Steps[0].R1 == row && move.Steps[0].C1 == col)
                 .ToList();
+
             return;
         }
 
@@ -253,7 +268,12 @@ public sealed class CornersController : IGameController
             HashSet<CornersBoard.Square> visited = VisitedSquares();
 
             List<CornersBoard.MoveChain> continuations =
-                _board.JumpSequencesFrom(row, col, currentSequence: null, visitedLandings: visited);
+                _board.JumpSequencesFrom(
+                    row,
+                    col,
+                    currentSequence: null,
+                    visitedSquares: visited,
+                    forbiddenSquare: _mirrorForbiddenSquare);
 
             if (continuations.Count > 0)
             {
@@ -355,10 +375,6 @@ public sealed class CornersController : IGameController
         if (IsGameOver || _turn != _aiColor)
             return null;
 
-        List<CornersBoard.MoveChain> legalMoves = _board.AllMoves(_turn)
-            .OrderByDescending(move => _board.MoveOrderingScore(move, _turn))
-            .ToList();
-
         if (Mode == AiMode.AlphaBeta)
         {
             (double score, CornersBoard.MoveChain? move) = AlphaBeta.Search(
@@ -374,7 +390,7 @@ public sealed class CornersController : IGameController
                 },
                 evaluate: (pos, root, side, generatedMoves) => pos.Evaluate(root, side, generatedMoves),
                 opponent: CornersBoard.Opponent,
-                isTerminal: (pos, side) => pos.IsTerminal() || pos.AllMoves(side).Count == 0,
+                isTerminal: (pos, side) => pos.IsTerminal(),
                 canPass: false,
                 rootPlayer: _aiColor,
                 depth: AlphaBetaDepth,
@@ -474,6 +490,7 @@ public sealed class CornersController : IGameController
         _possibleMoves.Clear();
         _jumpContinuationMode = false;
         _executedTurn = null;
+        _mirrorForbiddenSquare = null;
     }
 
     /// <summary>
