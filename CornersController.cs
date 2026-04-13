@@ -496,29 +496,7 @@ public sealed class CornersController : IGameController
     /// </summary>
     private bool CheckGameOver(int movedPlayer) // 
     {
-
-        if (_board.HasBuiltGoalHouse(movedPlayer))
-        {
-            IsGameOver = true;
-            SetWinnerMessage(movedPlayer);
-            return true;
-        }
-
-        if (_board.BlackMovesPlayed == CornersBoard.HOME_EXIT_LIMIT)
-        {
-            int? DeadlineWinner = _board.GetDeadlineWinner();
-            if (DeadlineWinner is not null)
-            {
-                IsGameOver = true;
-                if (DeadlineWinner == CornersBoard.EMPTY)
-                    SetWinnerMessage(null);
-                else
-                    SetWinnerMessage(DeadlineWinner);
-                return true;
-            }
-        }
-
-        if (_board.BlackMovesPlayed >= CornersBoard.BLACK_MOVE_LIMIT)
+        if (_board.IsTerminal())
         {
             IsGameOver = true;
             SetWinnerMessage(_board.GetWinner());

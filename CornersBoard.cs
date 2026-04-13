@@ -387,13 +387,12 @@ public sealed class CornersBoard
     }
 
     /// <summary>
-    /// Наступил ли конец игры
+    /// Наступил ли конец игры (если белые уже заняли целевой дом, у чёрных есть ещё один ход на это)
     /// </summary>
     public bool IsTerminal()
     {
         return
-            HasBuiltGoalHouse(WHITE) ||
-            HasBuiltGoalHouse(BLACK) ||
+            (WhiteMovesPlayed == BlackMovesPlayed && (HasBuiltGoalHouse(WHITE) || HasBuiltGoalHouse(BLACK))) ||
             GetDeadlineWinner() is not null ||
             BlackMovesPlayed >= BLACK_MOVE_LIMIT;
     }
@@ -440,12 +439,20 @@ public sealed class CornersBoard
     /// </summary>
     public int? GetWinner()
     {
-        if (HasBuiltGoalHouse(WHITE))
-            return WHITE;
+        if (WhiteMovesPlayed == BlackMovesPlayed) // проверка после хода чёрных
+        {
+            bool whiteGoal = HasBuiltGoalHouse(WHITE);
+            bool blackGoal = HasBuiltGoalHouse(BLACK);
 
-        if (HasBuiltGoalHouse(BLACK))
-            return BLACK;
+            if (whiteGoal && blackGoal)
+                return null;
 
+            if (whiteGoal)
+                return WHITE;
+
+            if (blackGoal)
+                return BLACK;
+        }
         int? DeadlineWinner = GetDeadlineWinner();
         if (DeadlineWinner is not null)
         {
@@ -575,18 +582,6 @@ public sealed class CornersBoard
         forbiddenLanding = MirrorByCenter(new Square(whiteLast.R2, whiteLast.C2));
 
         return true;
-    }
-
-    /// <summary>
-    /// Попадает ли цепочка chain хотя бы на одном шаге на клетку target
-    /// </summary>
-    private static bool ChainTouches(MoveChain chain, Square target)
-    {
-        foreach (MoveStep step in chain.Steps)
-            if (step.R2 == target.R && step.C2 == target.C)
-                return true;
-
-        return false;
     }
 
     /// <summary>
