@@ -216,18 +216,11 @@ public sealed class CornersBoard
         player == WHITE ? DistanceToWhiteGoal[row, col] : DistanceToBlackGoal[row, col];
 
     /// <summary>
-    /// Получить все допустимые ходы игрока, с учётом ограничения на 11-й зеркальный ход чёрных
+    /// Получить все допустимые ходы игрока, с учётом антиничейных ограничений
     /// </summary>
     public List<MoveChain> AllMoves(int player)
     {
         List<MoveChain> moves = new();
-
-        Square requiredStart = default;
-        Square forbiddenLanding = default;
-
-        bool hasMirrorRestriction =
-            player == BLACK &&
-            GetMirrorRestriction(out requiredStart, out forbiddenLanding);
 
         for (int row = 0; row < BOARD_SIZE; row++)
             for (int col = 0; col < BOARD_SIZE; col++)
@@ -235,13 +228,8 @@ public sealed class CornersBoard
                 if (!IsPlayersPiece(Grid[row, col], player))
                     continue;
 
-                Square? forbiddenSquare = null;
-
-                if (hasMirrorRestriction && row == requiredStart.R && col == requiredStart.C)
-                    forbiddenSquare = forbiddenLanding;
-
-                moves.AddRange(SlidesFrom(row, col, forbiddenSquare));
-                moves.AddRange(JumpSequencesFrom(row, col, forbiddenSquare: forbiddenSquare));
+                moves.AddRange(SlidesFrom(row, col, player));
+                moves.AddRange(JumpSequencesFrom(row, col, player));
             }
 
         return moves;
@@ -249,9 +237,9 @@ public sealed class CornersBoard
 
 
     /// <summary>
-    /// Список простых шагов из заданной клетки на соседнюю пустую клетку, с учётом возможной запрещённой клетки
+    /// Список простых шагов из клетки (row,col) для игрока player, с учётом антиничейных ограничений
     /// </summary>
-    public List<MoveChain> SlidesFrom(int row, int col, Square? forbiddenSquare = null)
+    public List<MoveChain> SlidesFrom(int row, int col, int player)
     {
         List<MoveChain> result = new();
 
@@ -265,8 +253,7 @@ public sealed class CornersBoard
             if (!InBounds(nr, nc) || Grid[nr, nc] != EMPTY)
                 continue;
 
-            if (forbiddenSquare is Square forbidden &&
-                nr == forbidden.R && nc == forbidden.C)
+            if (!IsAllowed(player, row, col, nr, nc))
                 continue;
 
             result.Add(new MoveChain(new[] { new MoveStep(row, col, nr, nc) }));
@@ -276,19 +263,25 @@ public sealed class CornersBoard
     }
 
     /// <summary>
-    /// Найти все цепочки прыжков для шашки из клетки (row, col).
-    /// Остановка после любого прыжка разрешена, нельзя повторно посещать visited, нельзя ходить на forbidden.
-    /// Для каждой конечной клетки сохраняется только одна цепочка ходов.
+    /// Найти все цепочки прыжков из клетки (row, col) для игрока player, с учётом антиничейных ограничений
+    /// Если это продолжение цепочки currentSequence, начало указано в (origStartRow,origStartCol) - важно для ограничений
+    /// Остановка после любого прыжка разрешена, нельзя повторно посещать visitedSquares
+    /// Для каждой конечной клетки сохраняется только одна цепочка ходов
     /// </summary>
     public List<MoveChain> JumpSequencesFrom(
         int row,
         int col,
+        int player,
+        int? origStartRow = null,
+        int? origStartCol = null,
         List<MoveStep>? currentSequence = null,
-        HashSet<Square>? visitedSquares = null,
-        Square? forbiddenSquare = null)
+        HashSet<Square>? visitedSquares = null)
     {
         currentSequence ??= new List<MoveStep>();
         visitedSquares ??= new HashSet<Square> { new Square(row, col) };
+
+        int startRow = origStartRow ?? row;
+        int startCol = origStartCol ?? col;
 
         Dictionary<Square, MoveChain> bestByLanding = new();
 
@@ -314,8 +307,7 @@ public sealed class CornersBoard
             if (visitedSquares.Contains(landing))
                 continue;
 
-            if (forbiddenSquare is Square forbidden && // если forbiddenSquare не null, называем его forbidden
-                landing.R == forbidden.R && landing.C == forbidden.C)
+            if (!IsAllowed(player, startRow, startCol, landRow, landCol))
                 continue;
 
             MoveStep step = new MoveStep(row, col, landRow, landCol);
@@ -325,14 +317,21 @@ public sealed class CornersBoard
 
             SaveChain(bestByLanding, new MoveChain(nextSequence));
 
-            // Рекурсивно продолжаем цепочку, но без Copy(): делаем ход временно и откатываем назад
+            // временно применяем шаг и продолжаем рекурсивно
             Grid[row, col] = EMPTY;
             Grid[landRow, landCol] = piece;
 
             HashSet<Square> nextVisited = new(visitedSquares) { landing };
 
             List<MoveChain> deeperChains =
-                JumpSequencesFrom(landRow, landCol, nextSequence, nextVisited, forbiddenSquare);
+                JumpSequencesFrom(
+                    landRow,
+                    landCol,
+                    player,
+                    startRow,
+                    startCol,
+                    nextSequence,
+                    nextVisited);
 
             foreach (MoveChain chain in deeperChains)
                 SaveChain(bestByLanding, chain);
@@ -510,6 +509,27 @@ public sealed class CornersBoard
             return WHITE;
 
         return null;
+    }
+
+    /// <summary>
+    /// Допустим ли ход для игрока player из (startRow, startCol) в (finishRow, finishCol)
+    /// Если недопустим, то цепочка прыжков, начатая в (startRow, startCol), не может касаться (finishRow, finishCol)
+    /// Учитываются ограничение на 11-й зеркальный ход чёрных и запрет возврата в свой дом после 40-го хода
+    /// </summary>
+    public bool IsAllowed(int player, int startRow, int startCol, int finishRow, int finishCol)
+    {
+        if (BlackMovesPlayed >= HOME_EXIT_LIMIT && IsOwnHome(finishRow, finishCol, player))
+            return false;
+
+        if (player == BLACK &&
+            GetMirrorRestriction(out Square requiredStart, out Square forbiddenLanding) &&
+            startRow == requiredStart.R && startCol == requiredStart.C &&
+            finishRow == forbiddenLanding.R && finishCol == forbiddenLanding.C)
+        {
+            return false;
+        }
+
+        return true;
     }
 
     /// <summary>

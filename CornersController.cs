@@ -59,11 +59,6 @@ public sealed class CornersController : IGameController
     /// </summary>
     private CornersBoard.MoveChain? _executedTurn;
 
-    /// <summary>
-    /// Клетка, запрещённая для хода ограничением на зеркальное повторение ходов
-    /// </summary>
-    private CornersBoard.Square? _mirrorForbiddenSquare;
-
     private CornersBoard.MoveChain? _pendingAiMove; // текущий ход ИИ, для анимации
     private int _pendingAiStepIndex; // текущий шаг в ходе ИИ, для анимации
 
@@ -83,7 +78,6 @@ public sealed class CornersController : IGameController
         _executedTurn = null;
 
         _pendingAiMove = null;
-        _mirrorForbiddenSquare = null;
 
         // _humanColor и _aiColor используются только в режиме игры с ИИ
         _humanColor = Random.Shared.Next(2) == 0 ? CornersBoard.WHITE : CornersBoard.BLACK;
@@ -229,14 +223,6 @@ public sealed class CornersController : IGameController
         {
             _selectedPiece = (row, col);
             _executedTurn = null;
-            _mirrorForbiddenSquare = null;
-
-            if (_turn == CornersBoard.BLACK &&
-                _board.GetMirrorRestriction(out CornersBoard.Square requiredStart, out CornersBoard.Square forbiddenLanding) &&
-                row == requiredStart.R && col == requiredStart.C)
-            {
-                _mirrorForbiddenSquare = forbiddenLanding;
-            }
 
             List<CornersBoard.MoveChain> allMoves = _board.AllMoves(_turn);
             _possibleMoves = allMoves
@@ -266,14 +252,17 @@ public sealed class CornersController : IGameController
             // Если допустимых продолжений нет, ход завершается
 
             HashSet<CornersBoard.Square> visited = VisitedSquares();
+            (int startRow, int startCol) = MoveOrigin();
 
             List<CornersBoard.MoveChain> continuations =
                 _board.JumpSequencesFrom(
                     row,
                     col,
+                    _turn,
+                    startRow,
+                    startCol,
                     currentSequence: null,
-                    visitedSquares: visited,
-                    forbiddenSquare: _mirrorForbiddenSquare);
+                    visitedSquares: visited);
 
             if (continuations.Count > 0)
             {
@@ -320,6 +309,23 @@ public sealed class CornersController : IGameController
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Исходная клетка текущего полного хода пользователя
+    /// </summary>
+    private (int Row, int Col) MoveOrigin()
+    {
+        if (_executedTurn is not null && _executedTurn.Steps.Count > 0)
+        {
+            CornersBoard.MoveStep first = _executedTurn.Steps[0];
+            return (first.R1, first.C1);
+        }
+
+        if (_selectedPiece is (int row, int col))
+            return (row, col);
+
+        throw new InvalidOperationException("Не удалось определить исходную клетку текущего хода");
     }
 
     private HashSet<CornersBoard.Square> VisitedSquares() // уже посещённые клетки в текущем прыжке
@@ -488,7 +494,6 @@ public sealed class CornersController : IGameController
         _possibleMoves.Clear();
         _jumpContinuationMode = false;
         _executedTurn = null;
-        _mirrorForbiddenSquare = null;
     }
 
     /// <summary>
