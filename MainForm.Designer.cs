@@ -124,9 +124,10 @@
             nudMctsMs.Maximum = new decimal(new int[] { 10000, 0, 0, 0 });
             nudMctsMs.Minimum = new decimal(new int[] { 250, 0, 0, 0 });
             nudMctsMs.Name = "nudMctsMs";
+            nudMctsMs.ReadOnly = true;
             nudMctsMs.Size = new Size(74, 31);
             nudMctsMs.TabIndex = 8;
-            nudMctsMs.Value = new decimal(new int[] { 1000, 0, 0, 0 });
+            nudMctsMs.Value = new decimal(new int[] { 750, 0, 0, 0 });
             // 
             // label3
             // 
@@ -175,6 +176,7 @@
             nudDepth.Maximum = new decimal(new int[] { 10, 0, 0, 0 });
             nudDepth.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
             nudDepth.Name = "nudDepth";
+            nudDepth.ReadOnly = true;
             nudDepth.Size = new Size(74, 31);
             nudDepth.TabIndex = 3;
             nudDepth.Value = new decimal(new int[] { 4, 0, 0, 0 });

@@ -19,7 +19,7 @@ public partial class MainForm : Form
     {
         InitializeComponent();
 
-        _controller = CreateControllerForSelectedGame(); // создаём контроллер для выбранной по умолчанию игры
+        _controller = CreateController(); // создаём контроллер для выбранной по умолчанию игры
 
         _controller.HumanVsHuman = _playWithoutAi; // по умолчанию false, так что первая игра будет с ИИ
 
@@ -27,7 +27,7 @@ public partial class MainForm : Form
 
         BindUiEvents(); // подписка на события компонентов формы
 
-        ApplyControllerToBoardView(); // связываем контролер с BoardView
+        ApplyController(); // связываем контролер с BoardView
 
         LoadDefaultsFromController(); // перенос значений по умолчанию из контролера в форму
 
@@ -35,7 +35,7 @@ public partial class MainForm : Form
 
         UpdateStatusAndParams(); // обновление надписи о цвете игрока
 
-        _ = MaybeRunAiLoopAsync(); // если игра начинается с хода ИИ
+        _ = MaybeRunAiLoop(); // если игра начинается с хода ИИ
     }
 
     /// <summary>
@@ -50,7 +50,7 @@ public partial class MainForm : Form
 
         UpdateStatusAndParams();
         _boardView.Refresh();
-        _ = MaybeRunAiLoopAsync();
+        _ = MaybeRunAiLoop();
     }
 
     private void InitializeBoardView()
@@ -83,7 +83,7 @@ public partial class MainForm : Form
                 SwitchGame();
         };
 
-        // переключение между алгоритмами ИИ.
+        // переключение между алгоритмами ИИ
         rbAlphaBeta.CheckedChanged += (_, __) =>
         {
             if (rbAlphaBeta.Checked)
@@ -93,11 +93,20 @@ public partial class MainForm : Form
             }
         };
 
-        rbMonteCarlo.CheckedChanged += (_, __) =>
+        //rbMonteCarlo.CheckedChanged += (_, __) => // упрощенный монте-карло, удалён из текущей версии программы
+        //{
+        //    if (rbMonteCarlo.Checked)
+        //    {
+        //        _controller.Mode = AiMode.MonteCarlo;
+        //        UpdateStatusAndParams();
+        //    }
+        //};
+
+        rbMcts.CheckedChanged += (_, __) =>
         {
-            if (rbMonteCarlo.Checked)
+            if (rbMcts.Checked)
             {
-                _controller.Mode = AiMode.MonteCarlo;
+                _controller.Mode = AiMode.Mcts;
                 UpdateStatusAndParams();
             }
         };
@@ -109,9 +118,15 @@ public partial class MainForm : Form
             UpdateStatusAndParams();
         };
 
-        nudSims.ValueChanged += (_, __) =>
+        //nudSims.ValueChanged += (_, __) =>
+        //{
+        //    _controller.Mode = AiMode.MonteCarlo;
+        //    UpdateStatusAndParams();
+        //};
+
+        nudMctsMs.ValueChanged += (_, __) =>
         {
-            _controller.Mode = AiMode.MonteCarlo;
+            _controller.Mode = AiMode.Mcts;
             UpdateStatusAndParams();
         };
 
@@ -131,7 +146,7 @@ public partial class MainForm : Form
     /// <summary>
     /// Создать контроллер для текущей выбранной игры
     /// </summary>
-    private IGameController CreateControllerForSelectedGame()
+    private IGameController CreateController()
     {
         GameKind kind;
 
@@ -156,7 +171,7 @@ public partial class MainForm : Form
     /// <summary>
     /// Связать текущий контроллер игры с контролом BoardView
     /// </summary>
-    private void ApplyControllerToBoardView()
+    private void ApplyController()
     {
         _boardView.BoardSize = _controller.BoardSize;
 
@@ -172,7 +187,7 @@ public partial class MainForm : Form
             _controller.HandleCellClick(row, col);
             UpdateStatusAndParams();
             _boardView.Refresh();
-            _ = MaybeRunAiLoopAsync();
+            _ = MaybeRunAiLoop();
         };
     }
 
@@ -182,17 +197,23 @@ public partial class MainForm : Form
     private void LoadDefaultsFromController()
     {
         rbAlphaBeta.Checked = _controller.Mode == AiMode.AlphaBeta;
-        rbMonteCarlo.Checked = _controller.Mode == AiMode.MonteCarlo;
+        //rbMonteCarlo.Checked = _controller.Mode == AiMode.MonteCarlo;
+        rbMcts.Checked = _controller.Mode == AiMode.Mcts;
 
         nudDepth.Value = Math.Clamp(
             _controller.AlphaBetaDepth,
             (int)nudDepth.Minimum,
             (int)nudDepth.Maximum);
 
-        nudSims.Value = Math.Clamp(
-            _controller.MonteCarloSimulations,
-            (int)nudSims.Minimum,
-            (int)nudSims.Maximum);
+        //nudSims.Value = Math.Clamp(
+        //    _controller.MonteCarloSimulations,
+        //    (int)nudSims.Minimum,
+        //    (int)nudSims.Maximum);
+
+        nudMctsMs.Value = Math.Clamp(
+            _controller.MctsTimeLimitMs,
+            (int)nudMctsMs.Minimum,
+            (int)nudMctsMs.Maximum);
     }
 
     /// <summary>
@@ -201,7 +222,8 @@ public partial class MainForm : Form
     private void UpdateAiParamsFromUi()
     {
         _controller.AlphaBetaDepth = (int)nudDepth.Value;
-        _controller.MonteCarloSimulations = (int)nudSims.Value;
+        //_controller.MonteCarloSimulations = (int)nudSims.Value;
+        _controller.MctsTimeLimitMs = (int)nudMctsMs.Value;
     }
 
     /// <summary>
@@ -211,7 +233,8 @@ public partial class MainForm : Form
     {
         UpdateAiParamsFromUi();
         rbAlphaBeta.Checked = _controller.Mode == AiMode.AlphaBeta;
-        rbMonteCarlo.Checked = _controller.Mode == AiMode.MonteCarlo;
+        //rbMonteCarlo.Checked = _controller.Mode == AiMode.MonteCarlo;
+        rbMcts.Checked = _controller.Mode == AiMode.Mcts;
 
         if (_controller.HumanVsHuman)
         {
@@ -232,20 +255,20 @@ public partial class MainForm : Form
     /// </summary>
     private void SwitchGame()
     {
-        _controller = CreateControllerForSelectedGame();
+        _controller = CreateController();
         _controller.HumanVsHuman = _playWithoutAi;
-        ApplyControllerToBoardView();
+        ApplyController();
         LoadDefaultsFromController();
         _controller.NewGame();
         UpdateStatusAndParams();
         _boardView.Refresh();
-        _ = MaybeRunAiLoopAsync();
+        _ = MaybeRunAiLoop();
     }
 
     /// <summary>
     /// Асинхронный цикл хода ИИ, с небольшой задержкой без блокирования окна. Может быть несколько ходов подряд
     /// </summary>
-    private async Task MaybeRunAiLoopAsync()
+    private async Task MaybeRunAiLoop()
     {
         if (_aiLoopRunning)
             return;

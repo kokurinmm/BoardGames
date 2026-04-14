@@ -131,23 +131,53 @@ public sealed class MctsSession<TPos, TMove> where TMove : class
         if (_root is null)
         {
             _root = CreateRoot(position, sideToMove);
+
+
+
+            System.Diagnostics.Debug.WriteLine($"MCTS: дерева не было, создан новый корень. Side={sideToMove}");
+            System.Diagnostics.Debug.WriteLine($"MCTS root: Visits={_root.Visits}, Children={_root.Children.Count}, Side={_root.SideToMove}");
+
+
             return;
         }
 
         // Если корень уже и так соответствует позиции, ничего не делаем
         if (_root.PositionKey == key && _root.SideToMove == sideToMove)
-            return;
+        {
 
+
+            System.Diagnostics.Debug.WriteLine($"MCTS: корень уже соответствует текущей позиции. Visits={_root.Visits}, Children={_root.Children.Count}");
+            System.Diagnostics.Debug.WriteLine($"MCTS root: Visits={_root.Visits}, Children={_root.Children.Count}, Side={_root.SideToMove}");
+
+
+            return;
+        }
         // Ищем позицию среди дочерних узлов; если не нашлась, создаём новое дерево
         Node? child = FindChildOfRoot(key, sideToMove);
         if (child is not null)
         {
             child.Parent = null;
             _root = child;
+
+
+
+
+            System.Diagnostics.Debug.WriteLine($"MCTS: корень успешно переведён в дочерний узел. Visits={_root.Visits}, Children={_root.Children.Count}");
+            System.Diagnostics.Debug.WriteLine($"MCTS root: Visits={_root.Visits}, Children={_root.Children.Count}, Side={_root.SideToMove}");
+
+
+
             return;
         }
 
         _root = CreateRoot(position, sideToMove);
+
+
+
+
+        System.Diagnostics.Debug.WriteLine($"MCTS: среди детей совпадения не найдено, дерево пересоздано. Side={sideToMove}");
+        System.Diagnostics.Debug.WriteLine($"MCTS root: Visits={_root.Visits}, Children={_root.Children.Count}, Side={_root.SideToMove}");
+
     }
 
     private Node CreateRoot(TPos position, int sideToMove)

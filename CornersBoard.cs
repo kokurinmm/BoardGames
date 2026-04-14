@@ -740,4 +740,40 @@ public sealed class CornersBoard
         return farthest;
     }
 
+    /// <summary>
+    /// Текстовый ключ состояния позиции. Нужен MCTS для переиспользования дерева между ходами
+    /// Включает служебную информацию, необходимую для антиничейных правил
+    /// </summary>
+    public string GetStateKey()
+    {
+        StringBuilder sb = new StringBuilder(BOARD_SIZE * BOARD_SIZE * 2 + 128);
+
+        for (int row = 0; row < BOARD_SIZE; row++)
+            for (int col = 0; col < BOARD_SIZE; col++)
+                sb.Append(Grid[row, col]).Append(',');
+
+        sb.Append('|').Append(WhiteMovesPlayed)
+          .Append('|').Append(BlackMovesPlayed)
+          .Append('|').Append(MirrorBroken ? '1' : '0');
+
+        if (_lastWhiteMove is null)
+        {
+            sb.Append('|').Append('0');
+        }
+        else
+        {
+            sb.Append('|').Append(_lastWhiteMove.Steps.Count);
+            foreach (MoveStep step in _lastWhiteMove.Steps)
+            {
+                sb.Append(';')
+                  .Append(step.R1).Append(',')
+                  .Append(step.C1).Append(',')
+                  .Append(step.R2).Append(',')
+                  .Append(step.C2);
+            }
+        }
+
+        return sb.ToString();
+    }
+
 }

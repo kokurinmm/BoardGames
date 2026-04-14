@@ -5,7 +5,8 @@ using System.Text;
 namespace BoardGames;
 
 /// <summary>
-/// Простейший вариант метода Монте-Карло в общем виде (можно использовать для разных игр)
+/// Простейший вариант метода Монте-Карло
+/// Удалён из текущей версии программы, вместо него есть более сильный Monte Carlo Tree Search
 /// </summary>
 public static class MonteCarlo
 {

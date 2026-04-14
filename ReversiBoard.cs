@@ -25,7 +25,7 @@ public sealed class ReversiBoard
     };
 
     /// <summary>
-    /// Содержимое доски (первый индекс — номер строки, второй — номер столбца)
+    /// Содержимое доски (первый индекс - номер строки, второй - номер столбца)
     /// </summary>
     public int[,] Grid { get; } = new int[BOARD_SIZE, BOARD_SIZE];
 
@@ -217,4 +217,19 @@ public sealed class ReversiBoard
 
         return total;
     }
+
+    /// <summary>
+    /// Текстовый ключ состояния позиции. Нужен MCTS для переиспользования дерева между ходами
+    /// </summary>
+    public string GetStateKey()
+    {
+        StringBuilder sb = new StringBuilder(BOARD_SIZE * BOARD_SIZE * 2);
+
+        for (int row = 0; row < BOARD_SIZE; row++)
+            for (int col = 0; col < BOARD_SIZE; col++)
+                sb.Append(Grid[row, col]).Append(',');
+
+        return sb.ToString();
+    }
+
 }

@@ -23,6 +23,8 @@ public sealed class CornersController : IGameController
     public int AlphaBetaDepth { get; set; } = 4;
     public int MonteCarloSimulations { get; set; } = 60;
 
+    public int MctsTimeLimitMs { get; set; } = 750;
+
     public bool IsGameOver { get; private set; }
 
     public string HumanPlayerDisplayName => Players.CornersName(_humanColor);
@@ -62,7 +64,27 @@ public sealed class CornersController : IGameController
     private CornersBoard.MoveChain? _pendingAiMove; // текущий ход ИИ, для анимации
     private int _pendingAiStepIndex; // текущий шаг в ходе ИИ, для анимации
 
+    private readonly MctsSession<CornersBoard, CornersBoard.MoveChain> _mcts; // сеанс MCTS
+
     public bool IsAiTurn => !HumanVsHuman && !IsGameOver && _turn == _aiColor;
+
+    public CornersController()
+    {
+        _mcts = new MctsSession<CornersBoard, CornersBoard.MoveChain>(
+            legalMoves: (pos, side) => pos.AllMoves(side),
+            applyMoveToCopy: (pos, move, side) =>
+            {
+                CornersBoard child = pos.Copy();
+                child.ApplyChain(move, side);
+                return child;
+            },
+            rolloutScore: CornersMctsRolloutResult,
+            opponent: CornersBoard.Opponent,
+            isTerminal: (pos, side) => pos.IsTerminal(),
+            positionKey: pos => pos.GetStateKey(),
+            canPass: false,
+            explorationConstant: Math.Sqrt(2.0));
+    }
 
     public void NewGame() // Запуск новой игры, в т.ч. случайный выбор цвета игроков
     {
@@ -82,6 +104,7 @@ public sealed class CornersController : IGameController
         // _humanColor и _aiColor используются только в режиме игры с ИИ
         _humanColor = Random.Shared.Next(2) == 0 ? CornersBoard.WHITE : CornersBoard.BLACK;
         _aiColor = CornersBoard.Opponent(_humanColor);
+        _mcts.Reset(); // перезапуск сеанса MCTS
     }
 
     public void Draw(Graphics g, Rectangle rect)  // Отрисовка доски
@@ -352,7 +375,7 @@ public sealed class CornersController : IGameController
             _executedTurn.Steps.Add(step);
     }
 
-    public bool MakeAiTurn()
+    public bool MakeAiTurn() // не используется, но может пригодиться для игр ИИ друг с другом
     {
         if (IsGameOver || _turn != _aiColor)
             return false;
@@ -368,6 +391,9 @@ public sealed class CornersController : IGameController
             return true;
 
         _turn = CornersBoard.Opponent(_turn);
+
+        if (!IsGameOver && Mode == AiMode.Mcts)
+            _mcts.AdvanceRootToPosition(_board, _turn); // привязываем дерево MCTS к новой позиции
 
         return true;
     }
@@ -406,49 +432,58 @@ public sealed class CornersController : IGameController
 
             return move;
         }
-
-        return MonteCarlo.BestMove(
-            position: _board,
-            legalMoves: (pos, side) => pos.AllMoves(side),
-            applyMoveToCopy: (pos, move) =>
-            {
-                CornersBoard child = pos.Copy();
-                child.ApplyChain(move, _aiColor);
-                return child;
-            },
-            playoutScore: CornersPlayoutScore,
-            player: _aiColor,
-            simulations: MonteCarloSimulations);
+        else if (Mode == AiMode.MonteCarlo)
+        {
+            return MonteCarlo.BestMove(
+                position: _board,
+                legalMoves: (pos, side) => pos.AllMoves(side),
+                applyMoveToCopy: (pos, move) =>
+                {
+                    CornersBoard child = pos.Copy();
+                    child.ApplyChain(move, _aiColor);
+                    return child;
+                },
+                playoutScore: (pos, player, rng) =>
+                CornersMctsRolloutResult(pos, player, CornersBoard.Opponent(player), rng),
+                player: _aiColor,
+                simulations: MonteCarloSimulations);
+        }
+        else
+            return _mcts.SearchBestMove(_board, _turn, _aiColor, MctsTimeLimitMs);
     }
 
+
     /// <summary>
-    /// Случайное доигрывание позиции для метода Монте-Карло. Возвращается результат с точки зрения игрока player
+    /// Случайное доигрывание позиции для Monte Carlo (sideToMove - чья очередь хода вначале)
+    /// Возвращается результат с точки зрения игрока player, от 0 до 1
     /// </summary>
-    private static double CornersPlayoutScore(CornersBoard position, int player, Random rng)
+    private static double CornersMctsRolloutResult(CornersBoard position, int player, int sideToMove, Random rng)
     {
         CornersBoard simulation = position.Copy();
-        int side = CornersBoard.Opponent(player);
+        int side = sideToMove;
 
         while (true)
         {
             if (simulation.IsTerminal())
             {
-                return CornersTerminalScore(simulation, player);
+                double score = CornersTerminalScore(simulation, player);
+                return Math.Clamp(0.5 * (score + 1.0), 0.0, 1.0); ;
             }
 
             List<CornersBoard.MoveChain> moves = simulation.AllMoves(side);
             if (moves.Count == 0)
             {
                 int winner = CornersBoard.Opponent(side);
-                return winner == player ? 1.0 : -1.0;
+                return winner == player ? 1.0 : 0.0;
             }
 
             CornersBoard.MoveChain randomMove = moves[rng.Next(moves.Count)];
             simulation.ApplyChain(randomMove, side);
-
             side = CornersBoard.Opponent(side);
         }
     }
+
+    
 
     /// <summary>
     /// Вспомогательный метод для оценки позиции в конце игры, применяемый в методе Монте-Карло
@@ -485,6 +520,9 @@ public sealed class CornersController : IGameController
             return;
 
         _turn = CornersBoard.Opponent(_turn);
+
+        if (!IsGameOver && Mode == AiMode.Mcts)
+            _mcts.AdvanceRootToPosition(_board, _turn); // привязываем дерево MCTS к новой позиции
 
     }
 
