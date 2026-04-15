@@ -242,10 +242,6 @@ public sealed class CheckersController : IGameController
         _turn = CheckersBoard.Opponent(_turn);
         CheckGameOver();
 
-        if (Mode == AiMode.Mcts)
-            _mcts.AdvanceRootToPosition(_board, _turn); // привязываем дерево MCTS к новой позиции
-
-
     }
 
     public bool BeginAiTurnAnimation()
@@ -294,9 +290,6 @@ public sealed class CheckersController : IGameController
 
             _turn = CheckersBoard.Opponent(_turn);
             CheckGameOver();
-
-            if (Mode == AiMode.Mcts)
-                _mcts.AdvanceRootToPosition(_board, _turn); // привязываем дерево MCTS к новой позиции
         }
 
         return true;
@@ -324,9 +317,6 @@ public sealed class CheckersController : IGameController
         _board.ApplyChain(bestMove);
         _turn = CheckersBoard.Opponent(_turn);
         CheckGameOver();
-
-        if (Mode == AiMode.Mcts)
-            _mcts.AdvanceRootToPosition(_board, _turn); // привязываем дерево MCTS к новой позиции
 
         return true;
     }

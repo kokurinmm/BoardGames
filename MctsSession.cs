@@ -1,8 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text;
 using System.Diagnostics; // для контроля времени работы алгоритма
 using System.Linq;
+using System.Text;
+using System.Xml.Linq;
 
 namespace BoardGames;
 
@@ -29,8 +30,8 @@ public sealed class MctsSession<TPos, TMove> where TMove : class
         public List<TMove>? UnexpandedMoves { get; set; } // ходы из узла, ещё не развёрнутые в дочерние узлы
         public bool MovesInitialized { get; set; } // создан ли список ходов из этого узла
 
-        public bool PassAvailable { get; set; } // допускается ли пас, если нет ходов (пас это ход в дочерний узел)
-        public bool PassExpanded { get; set; } // был ли уже сделан пас (тогда второй пас это конец игры)
+        public bool PassAvailable { get; set; } // должен ли быть пас в этом узле (ходов нет, а пас разрешён)
+        public bool PassExpanded { get; set; } // создан ли дочерний узел, в который ведёт пас из этого узла
 
         public int Visits { get; set; } // количество посещений узла (лучшие ходы будут иметь максимум посещений)
         public double TotalScore { get; set; } // общий счёт, накопленный в узле
@@ -90,9 +91,12 @@ public sealed class MctsSession<TPos, TMove> where TMove : class
 
     /// <summary>
     /// Найти лучший ход за отведённое время timeLimitMs (с максимальным количеством посещений)
+    /// Если правила игры допускают пас, эту функцию нужно вызывать, даже если ходов нет (перепривяжет дерево и вернёт null)
     /// </summary>
     public TMove? SearchBestMove(TPos position, int sideToMove, int rootPlayer, int timeLimitMs)
     {
+        Stopwatch sw = Stopwatch.StartNew();
+
         AdvanceRootToPosition(position, sideToMove);
 
         if (_root is null)
@@ -100,23 +104,78 @@ public sealed class MctsSession<TPos, TMove> where TMove : class
 
         InitializeNode(_root);
 
-        if ((_root.UnexpandedMoves is null || _root.UnexpandedMoves.Count == 0) &&
-            !_root.PassAvailable &&
-            _root.Children.Count == 0) // ходить некуда - нет ни неразвёрнутых ходов, ни дочерних узлов, ни паса
+        if (_root.PassAvailable) // если в этом узле должен быть пас
         {
+            Node? passChild = _root.Children.FirstOrDefault(ch =>
+                ch.MoveFromParent is null && ch.SideToMove == _opponent(_root.SideToMove));
+
+                        
+            if (passChild is not null)
+            {
+                AdvanceRootToPosition(passChild.Position, passChild.SideToMove);
+                
+
+                System.Diagnostics.Debug.WriteLine(
+                $"PASS: passChild найден, " +
+                $"children={passChild.Children.Count}, " +
+                $"movesInitialized={passChild.MovesInitialized}, " +
+                $"unexpanded={(passChild.UnexpandedMoves?.Count ?? -1)}, " +
+                $"visits={passChild.Visits}");
+
+
+            }
+            else
+            {
+                
+
+                Debug.WriteLine(
+                        $"PASS: passChild НЕ найден, root visits={_root.Visits}, " +
+                        $"children={_root.Children.Count}, passExpanded={_root.PassExpanded}");
+
+
+            }
+
             return null;
         }
 
-        Stopwatch sw = Stopwatch.StartNew();
-        while (sw.ElapsedMilliseconds < timeLimitMs)
+        if ((_root.UnexpandedMoves is null || _root.UnexpandedMoves.Count == 0) && _root.Children.Count == 0)
+            return null; // ходов нет, паса тоже нет
+
+        do
         {
             RunIteration(rootPlayer);
         }
+        while (sw.ElapsedMilliseconds < timeLimitMs);
 
-        Node? bestChild = _root.Children
-            .OrderByDescending(ch => ch.Visits)
-            .ThenByDescending(ch => ch.AverageScore)
-            .FirstOrDefault();
+        Node? bestChild = null;
+        int bestVisits = int.MinValue;
+        double bestAverage = double.NegativeInfinity;
+
+        foreach (Node child in _root.Children)
+        {
+            if (bestChild is null ||
+                child.Visits > bestVisits ||
+                (child.Visits == bestVisits && child.AverageScore > bestAverage))
+            {
+                bestChild = child;
+                bestVisits = child.Visits;
+                bestAverage = child.AverageScore;
+            }
+        }
+
+        if (bestChild is not null)
+            AdvanceRootToPosition(bestChild.Position, bestChild.SideToMove);
+
+        
+
+        if (bestChild is not null)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"BEST: child side={bestChild.SideToMove}, visits={bestChild.Visits}, " +
+                $"children={bestChild.Children.Count}, move={(bestChild.MoveFromParent is null ? "PASS" : "MOVE")}");
+        }
+
+
 
         return bestChild?.MoveFromParent;
     }
@@ -131,7 +190,6 @@ public sealed class MctsSession<TPos, TMove> where TMove : class
         if (_root is null)
         {
             _root = CreateRoot(position, sideToMove);
-
 
 
             System.Diagnostics.Debug.WriteLine($"MCTS: дерева не было, создан новый корень. Side={sideToMove}");
@@ -160,23 +218,29 @@ public sealed class MctsSession<TPos, TMove> where TMove : class
             _root = child;
 
 
-
-
             System.Diagnostics.Debug.WriteLine($"MCTS: корень успешно переведён в дочерний узел. Visits={_root.Visits}, Children={_root.Children.Count}");
             System.Diagnostics.Debug.WriteLine($"MCTS root: Visits={_root.Visits}, Children={_root.Children.Count}, Side={_root.SideToMove}");
 
 
-
             return;
         }
-
-        _root = CreateRoot(position, sideToMove);
-
-
-
+        
 
         System.Diagnostics.Debug.WriteLine($"MCTS: среди детей совпадения не найдено, дерево пересоздано. Side={sideToMove}");
         System.Diagnostics.Debug.WriteLine($"MCTS root: Visits={_root.Visits}, Children={_root.Children.Count}, Side={_root.SideToMove}");
+        System.Diagnostics.Debug.WriteLine(
+                $"MISS: target side={sideToMove}, keyHash={key.GetHashCode()}, " +
+                $"root side={_root.SideToMove}, root children={_root.Children.Count}");
+        foreach (Node ch in _root.Children)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"  child: side={ch.SideToMove}, keyHash={ch.PositionKey.GetHashCode()}, " +
+                $"visits={ch.Visits}, children={ch.Children.Count}, " +
+                $"move={(ch.MoveFromParent is null ? "PASS" : "MOVE")}");
+        }
+
+
+        _root = CreateRoot(position, sideToMove);
 
     }
 
@@ -248,7 +312,7 @@ public sealed class MctsSession<TPos, TMove> where TMove : class
             // Иначе спускаемся к лучшему дочернему узлу по формуле UCT
             if (node.Children.Count == 0)
                 break;
-            node = SelectChildByUct(node);
+            node = SelectChildByUct(node, rootPlayer);
         }
 
         // Rollout
@@ -280,16 +344,34 @@ public sealed class MctsSession<TPos, TMove> where TMove : class
     /// <summary>
     /// Выбор дочернего узла по формуле UCT: averageScore + C * sqrt(ln(parentVisits) / childVisits)
     /// Первое слагаемое отвечает за эксплуатацию перспективных ветвей, второе за исследование малоизученных
+    /// Счёт в узлах считается с точки зрения rootPlayer (это ИИ)
     /// </summary>
-    private Node SelectChildByUct(Node node)
+    private Node SelectChildByUct(Node node, int rootPlayer)
     {
         double logParentVisits = Math.Log(Math.Max(1, node.Visits));
 
-        return node.Children
-            .OrderByDescending(child =>
-                child.AverageScore +
-                _explorationConstant * Math.Sqrt(logParentVisits / Math.Max(1, child.Visits)))
-            .First();
+        Node best = node.Children[0];
+        double bestScore = double.NegativeInfinity;
+
+        foreach (Node child in node.Children)
+        {
+            double exploitation =
+                node.SideToMove == rootPlayer
+                    ? child.AverageScore
+                    : 1.0 - child.AverageScore; // перспективность ветви; для противника rootPlayer счёт противоположный
+
+            double exploration =
+                _explorationConstant * Math.Sqrt(logParentVisits / Math.Max(1, child.Visits)); // малоизученность ветви
+
+            double score = exploitation + exploration;
+
+            if (score > bestScore)
+            {
+                bestScore = score;
+                best = child;
+            }
+        }
+        return best;
     }
 
     /// <summary>

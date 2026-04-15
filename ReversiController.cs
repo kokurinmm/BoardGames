@@ -156,12 +156,14 @@ public sealed class ReversiController : IGameController
         ResolveTurn();
     }
 
-    public bool BeginAiTurnAnimation()
+    public bool BeginAiTurnAnimation() // Подготовить ход ИИ (в реверси нет анимированных ходов из нескольких шагов)
     {
         if (IsGameOver || _turn != _aiColor)
             return false;
 
         var legalMoves = _board.ValidMoves(_turn);
+
+        ReversiBoard.Move? bestMove = FindBestAiMove(legalMoves); // вызываем даже если ходов нет и это пас - для MCTS
 
         if (legalMoves.Count == 0)
         {
@@ -169,7 +171,6 @@ public sealed class ReversiController : IGameController
             return true;
         }
 
-        ReversiBoard.Move? bestMove = FindBestAiMove(legalMoves);
         if (bestMove is null)
             return false;
 
@@ -180,7 +181,7 @@ public sealed class ReversiController : IGameController
 
     public bool HasPendingAiAnimation => _hasPendingAiMove;
 
-    public bool ApplyNextAiAnimationStep()
+    public bool ApplyNextAiAnimationStep() // Отобразить на доске подготовленный ход ИИ
     {
         if (!_hasPendingAiMove || _pendingAiMove is null)
             return false;
@@ -202,7 +203,7 @@ public sealed class ReversiController : IGameController
     {
         legalMoves ??= _board.ValidMoves(_turn);
 
-        if (legalMoves.Count == 0)
+        if (legalMoves.Count == 0 && Mode != AiMode.Mcts)
             return null;
 
         ReversiBoard.Move? bestMove = null;
@@ -269,13 +270,15 @@ public sealed class ReversiController : IGameController
             return false;
 
         var legalMoves = _board.ValidMoves(_turn);
+
+        ReversiBoard.Move? bestMove = FindBestAiMove(legalMoves); // вызываем даже если ходов нет и это пас - для MCTS
+
         if (legalMoves.Count == 0)
         {
             ResolveTurn();
             return true;
         }
 
-        ReversiBoard.Move? bestMove = FindBestAiMove(legalMoves);
         if (bestMove is null)
             return false;
 
@@ -291,21 +294,17 @@ public sealed class ReversiController : IGameController
     {
         _turn = ReversiBoard.Opponent(_turn); // ход сделан, передаём ход противнику
 
-        if (Mode == AiMode.Mcts)
-            _mcts.AdvanceRootToPosition(_board, _turn); // привязываем дерево MCTS к новой позиции
-
         if (_board.HasAnyMoves(_turn)) // если у него есть допустимые ходы, он и должен ходить
             return;
 
-        int opponent = ReversiBoard.Opponent(_turn); // или он пасует, передаём очередь хода снова
+        int opponent = ReversiBoard.Opponent(_turn);
 
-        if (_board.HasAnyMoves(opponent))
+        if (_board.HasAnyMoves(opponent)) // у текущего игрока ходов нет, но у противника есть
         {
-            _turn = opponent;
+            if (!HumanVsHuman && _turn == _aiColor)
+                return; // если нет ходов у ИИ, оставляем очередь хода у ИИ, чтобы он сделал пас - важно для MCTS
 
-            if (Mode == AiMode.Mcts)
-                _mcts.AdvanceRootToPosition(_board, _turn); // привязываем дерево MCTS к новой позиции
-
+            _turn = opponent; // если нет ходов у человека, то передаём ход противнику
             return;
         }
 
@@ -355,11 +354,11 @@ public sealed class ReversiController : IGameController
 
         while (!simulation.IsTerminal())
         {
-            List<ReversiBoard.Move> legal = simulation.ValidMoves(side).Keys.ToList();
+            List<ReversiBoard.Move> moves = simulation.ValidMoves(side).Keys.ToList();
 
-            if (legal.Count > 0)
+            if (moves.Count > 0)
             {
-                ReversiBoard.Move choice = legal[rng.Next(legal.Count)];
+                ReversiBoard.Move choice = moves[rng.Next(moves.Count)];
                 simulation.ApplyMove(choice.X, choice.Y, side);
             }
 

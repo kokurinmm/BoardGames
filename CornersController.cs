@@ -392,9 +392,6 @@ public sealed class CornersController : IGameController
 
         _turn = CornersBoard.Opponent(_turn);
 
-        if (!IsGameOver && Mode == AiMode.Mcts)
-            _mcts.AdvanceRootToPosition(_board, _turn); // привязываем дерево MCTS к новой позиции
-
         return true;
     }
 
@@ -462,51 +459,47 @@ public sealed class CornersController : IGameController
         CornersBoard simulation = position.Copy();
         int side = sideToMove;
 
+        const double alpha = 0.15;
+        int? winner;
+
         while (true)
         {
             if (simulation.IsTerminal())
             {
-                double score = CornersTerminalScore(simulation, player);
-                return Math.Clamp(0.5 * (score + 1.0), 0.0, 1.0); ;
+                winner = simulation.GetWinner();
+                break;
             }
 
             List<CornersBoard.MoveChain> moves = simulation.AllMoves(side);
-            if (moves.Count == 0)
+
+            if (moves.Count > 0)
             {
-                int winner = CornersBoard.Opponent(side);
-                return winner == player ? 1.0 : 0.0;
+                CornersBoard.MoveChain randomMove = moves[rng.Next(moves.Count)];
+                simulation.ApplyChain(randomMove, side);
+                side = CornersBoard.Opponent(side);
             }
-
-            CornersBoard.MoveChain randomMove = moves[rng.Next(moves.Count)];
-            simulation.ApplyChain(randomMove, side);
-            side = CornersBoard.Opponent(side);
+            else
+            {
+                winner = CornersBoard.Opponent(side);
+                break;
+            }
         }
-    }
 
-    
+        int diff = simulation.CountInGoalHome(player) - simulation.CountInGoalHome(CornersBoard.Opponent(player));
+        double margin = alpha * diff / 9.0;
 
-    /// <summary>
-    /// Вспомогательный метод для оценки позиции в конце игры, применяемый в методе Монте-Карло
-    /// </summary>
-    private static double CornersTerminalScore(CornersBoard board, int player)
-    {
-        int opponent = CornersBoard.Opponent(player);
-
-        int myGoal = board.CountInGoalHome(player);
-        int oppGoal = board.CountInGoalHome(opponent);
-
-        double goalMargin = (myGoal - oppGoal) / 9.0;
-
-        const double AlphaGoal = 0.20;
-
-        int? winner = board.GetWinner();
-
+        double baseScore;
         if (winner is null)
-            return 0.0;
+            baseScore = 0.5;
+        else
+            baseScore = winner == player ? 1.0 - alpha : alpha;
 
-        double baseScore = winner == player ? 1.0 : -1.0;
-        return baseScore + AlphaGoal * goalMargin;
+        double value = baseScore + margin; // от 0 до alpha при проигрыше, около 0.5 при ничье, от 1-alpha до 1 при победе
+
+        return Math.Clamp(value, 0.0, 1.0);
+
     }
+  
 
     private void FinishTurn() // завершение хода
     {
@@ -520,9 +513,6 @@ public sealed class CornersController : IGameController
             return;
 
         _turn = CornersBoard.Opponent(_turn);
-
-        if (!IsGameOver && Mode == AiMode.Mcts)
-            _mcts.AdvanceRootToPosition(_board, _turn); // привязываем дерево MCTS к новой позиции
 
     }
 
