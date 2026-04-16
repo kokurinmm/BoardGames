@@ -20,7 +20,7 @@ public static class AlphaBeta
         Func<TPos, TMove, int, TPos> applyMoveToCopy, // функция для применения хода к копии доски
         Func<TPos, int, int, List<TMove>?, double> evaluate, // базовая функция для оценки позиции
         Func<int, int> opponent, // функция для нахождения кода противоположной стороны (обычно меняет знак у +1 или -1)
-        Func<TPos, int, bool> isTerminal, // закончена ли игра в данной позиции, если ход данного игрока
+        Func<TPos, int, bool> isTerminal, // конец игры, если ход данного игрока (наличие ходов здесь можно не проверять)
         bool canPass, // допускаются ли правилами игры пропуски хода, когда нет допустимых ходов
         int rootPlayer, // игрок, с точки зрения которого ведётся оценка позиции
         int depth, // глубина поиска

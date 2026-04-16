@@ -63,9 +63,6 @@ public sealed class CheckersController : IGameController
     private CheckersBoard.MoveChain? _pendingAiMove; // текущий ход или цепочка ходов ИИ, для анимации
     private int _pendingAiStepIndex; // текущий шаг в цепочке ходов ИИ, для анимации
 
-    private int _drawCount; // текущее количество ходов только дамками без взятий, для критерия ничьи
-    private const int DRAW_NUM = 15; // количество ходов только дамками без взятий, после которого объявляется ничья
-
     private readonly MctsSession<CheckersBoard, CheckersBoard.MoveChain> _mcts; // сеанс MCTS
 
     public CheckersController()
@@ -80,7 +77,7 @@ public sealed class CheckersController : IGameController
             },
             rolloutScore: CheckersMctsRolloutResult,
             opponent: CheckersBoard.Opponent,
-            isTerminal: (pos, side) => pos.AllMoves(side).Count == 0,
+            isTerminal: (pos, side) => pos.QuietMoves >= CheckersBoard.DRAW_NUM,
             positionKey: pos => pos.GetStateKey(),
             canPass: false,
             explorationConstant: Math.Sqrt(2.0));
@@ -98,9 +95,7 @@ public sealed class CheckersController : IGameController
         _mustContinueJump = false;
         GameOverMessage = null;
 
-        _drawCount = 0;
-
-        _pendingAiMove = null; // на всякий случай - сброс анимации ИИ-хода
+         _pendingAiMove = null; // на всякий случай - сброс анимации ИИ-хода
 
         _turn = CheckersBoard.WHITE; // первыми ходят белые
 
@@ -209,16 +204,7 @@ public sealed class CheckersController : IGameController
             return;
 
         CheckersBoard.MoveStep step = matching[0].Steps[0];
-
-        // Если ход дамкой без взятия, увеличиваем счётчик для критерия ничьи, иначе обнуляем его
-        if (!_mustContinueJump && CheckersBoard.IsKing(_board.Grid[step.R1, step.C1]) && !step.Captured.HasValue)
-        {
-            _drawCount++;
-        }
-        else
-        {
-            _drawCount = 0;
-        }
+        int movingPiece = _board.Grid[step.R1, step.C1];
 
         _board.ApplyStep(step);
 
@@ -234,6 +220,8 @@ public sealed class CheckersController : IGameController
                 return;
             }
         }
+
+        _board.UpdateQuietCount(step, movingPiece);
 
         _selectedPiece = null;
         _possibleMoves.Clear();
@@ -258,14 +246,7 @@ public sealed class CheckersController : IGameController
         // Если ход дамкой без взятия, увеличиваем счётчик для критерия ничьи, иначе обнуляем его
         CheckersBoard.MoveStep firstStep = _pendingAiMove.Steps[0];
         int startPiece = _board.Grid[firstStep.R1, firstStep.C1];
-        if (CheckersBoard.IsKing(startPiece) && !firstStep.Captured.HasValue)
-        {
-            _drawCount++;
-        }
-        else
-        {
-            _drawCount = 0;
-        }
+        _board.UpdateQuietCount(firstStep, startPiece);
 
         return true;
     }
@@ -300,19 +281,6 @@ public sealed class CheckersController : IGameController
         CheckersBoard.MoveChain? bestMove = FindBestAiMove();
         if (bestMove is null || bestMove.Steps.Count == 0)
             return false;
-
-        // Если ход дамкой без взятия, увеличиваем счётчик для критерия ничьи, иначе обнуляем его
-        CheckersBoard.MoveStep firstStep = bestMove.Steps[0];
-        int startPiece = _board.Grid[firstStep.R1, firstStep.C1];
-        if (CheckersBoard.IsKing(startPiece) && !firstStep.Captured.HasValue)
-        {
-            _drawCount++;
-        }
-        else
-        {
-            _drawCount = 0;
-        }
-
 
         _board.ApplyChain(bestMove);
         _turn = CheckersBoard.Opponent(_turn);
@@ -351,7 +319,7 @@ public sealed class CheckersController : IGameController
                 },
                 evaluate: (pos, root, side, generatedMoves) => pos.Evaluate(root, side, generatedMoves),
                 opponent: CheckersBoard.Opponent,
-                isTerminal: (pos, side) => pos.AllMoves(side).Count == 0,
+                isTerminal: (pos, side) => pos.QuietMoves >= CheckersBoard.DRAW_NUM,
                 canPass: false,
                 rootPlayer: _aiColor,
                 depth: AlphaBetaDepth,
@@ -390,9 +358,7 @@ public sealed class CheckersController : IGameController
         CheckersBoard simulation = position.Copy();
         int side = sideToMove;
 
-        const int playoutLimit = 25;
-
-        for (int t = 0; t < playoutLimit; t++)
+        while (true)
         {
             List<CheckersBoard.MoveChain> moves = simulation.AllMoves(side);
             if (moves.Count == 0)
@@ -401,12 +367,14 @@ public sealed class CheckersController : IGameController
                 return winner == player ? 1.0 : 0.0;
             }
 
+            if (simulation.QuietMoves >= CheckersBoard.DRAW_NUM)
+                return 0.5;
+
             CheckersBoard.MoveChain randomMove = moves[rng.Next(moves.Count)];
             simulation.ApplyChain(randomMove);
             side = CheckersBoard.Opponent(side);
         }
 
-        return 0.5;
     }
 
     /// <summary>
@@ -420,7 +388,7 @@ public sealed class CheckersController : IGameController
         List<CheckersBoard.MoveChain> moves = _board.AllMoves(_turn);
         if (moves.Count > 0)
         {
-            if (_drawCount >= DRAW_NUM) // если слишком много ходов только дамками без взятий, ничья
+            if (_board.QuietMoves >= CheckersBoard.DRAW_NUM) // если слишком много ходов только дамками без взятий, ничья
             {
                 IsGameOver = true;
                 GameOverMessage = "Ничья";

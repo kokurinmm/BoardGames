@@ -52,7 +52,7 @@ public sealed class MctsSession<TPos, TMove> where TMove : class
     private readonly Func<TPos, TMove, int, TPos> _applyMoveToCopy; // применить к позиции ход данного игрока
     private readonly Func<TPos, int, int, Random, double> _rolloutScore; // оценка позиции путём случайных доигрываний
     private readonly Func<int, int> _opponent; // цвет противника (обычно функция умножения на -1)
-    private readonly Func<TPos, int, bool> _isTerminal; // является ли позиция финальной при ходе данного игрока
+    private readonly Func<TPos, int, bool> _isTerminal; // финальная ли позиция (отсутствие ходов учитывается отдельно)
     private readonly Func<TPos, string> _positionKey; // ключ позиции
     private readonly bool _canPass; // разрешён ли пас, если нет ходов
     private readonly double _explorationConstant; // коэффициент исследования
