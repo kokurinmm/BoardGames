@@ -36,11 +36,8 @@
             nudMctsMs = new NumericUpDown();
             label3 = new Label();
             rbMcts = new RadioButton();
-            nudSims = new NumericUpDown();
-            label2 = new Label();
             nudDepth = new NumericUpDown();
             label1 = new Label();
-            rbMonteCarlo = new RadioButton();
             rbAlphaBeta = new RadioButton();
             lblStatus = new Label();
             pnlBoard = new Panel();
@@ -49,7 +46,6 @@
             groupBox1.SuspendLayout();
             groupBox2.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)nudMctsMs).BeginInit();
-            ((System.ComponentModel.ISupportInitialize)nudSims).BeginInit();
             ((System.ComponentModel.ISupportInitialize)nudDepth).BeginInit();
             SuspendLayout();
             // 
@@ -104,11 +100,8 @@
             groupBox2.Controls.Add(nudMctsMs);
             groupBox2.Controls.Add(label3);
             groupBox2.Controls.Add(rbMcts);
-            groupBox2.Controls.Add(nudSims);
-            groupBox2.Controls.Add(label2);
             groupBox2.Controls.Add(nudDepth);
             groupBox2.Controls.Add(label1);
-            groupBox2.Controls.Add(rbMonteCarlo);
             groupBox2.Controls.Add(rbAlphaBeta);
             groupBox2.Location = new Point(12, 147);
             groupBox2.Name = "groupBox2";
@@ -149,27 +142,6 @@
             rbMcts.Text = "Monte Carlo Tree Search";
             rbMcts.UseVisualStyleBackColor = true;
             // 
-            // nudSims
-            // 
-            nudSims.Location = new Point(187, 180);
-            nudSims.Maximum = new decimal(new int[] { 200, 0, 0, 0 });
-            nudSims.Minimum = new decimal(new int[] { 2, 0, 0, 0 });
-            nudSims.Name = "nudSims";
-            nudSims.Size = new Size(74, 31);
-            nudSims.TabIndex = 5;
-            nudSims.Value = new decimal(new int[] { 60, 0, 0, 0 });
-            nudSims.Visible = false;
-            // 
-            // label2
-            // 
-            label2.AutoSize = true;
-            label2.Location = new Point(121, 180);
-            label2.Name = "label2";
-            label2.Size = new Size(108, 25);
-            label2.TabIndex = 4;
-            label2.Text = "Симуляций:";
-            label2.Visible = false;
-            // 
             // nudDepth
             // 
             nudDepth.Location = new Point(120, 70);
@@ -190,18 +162,6 @@
             label1.TabIndex = 2;
             label1.Text = "Глубина:";
             // 
-            // rbMonteCarlo
-            // 
-            rbMonteCarlo.AutoSize = true;
-            rbMonteCarlo.Location = new Point(6, 180);
-            rbMonteCarlo.Name = "rbMonteCarlo";
-            rbMonteCarlo.Size = new Size(145, 29);
-            rbMonteCarlo.TabIndex = 1;
-            rbMonteCarlo.TabStop = true;
-            rbMonteCarlo.Text = "Монте Карло";
-            rbMonteCarlo.UseVisualStyleBackColor = true;
-            rbMonteCarlo.Visible = false;
-            // 
             // rbAlphaBeta
             // 
             rbAlphaBeta.AutoSize = true;
@@ -217,7 +177,7 @@
             // lblStatus
             // 
             lblStatus.BorderStyle = BorderStyle.FixedSingle;
-            lblStatus.Font = new Font("Segoe UI", 12F);
+            lblStatus.Font = new Font("Segoe UI", 12F, FontStyle.Bold);
             lblStatus.Location = new Point(14, 369);
             lblStatus.Name = "lblStatus";
             lblStatus.Size = new Size(259, 39);
@@ -269,7 +229,6 @@
             groupBox2.ResumeLayout(false);
             groupBox2.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)nudMctsMs).EndInit();
-            ((System.ComponentModel.ISupportInitialize)nudSims).EndInit();
             ((System.ComponentModel.ISupportInitialize)nudDepth).EndInit();
             ResumeLayout(false);
         }
@@ -280,12 +239,9 @@
         private RadioButton rbReversi;
         private RadioButton rbCheckers;
         private GroupBox groupBox2;
-        private RadioButton rbMonteCarlo;
         private RadioButton rbAlphaBeta;
         private Label label1;
-        private Label label2;
         private NumericUpDown nudDepth;
-        private NumericUpDown nudSims;
         private Label lblStatus;
         private Panel pnlBoard;
         private Button btnNewGame;
