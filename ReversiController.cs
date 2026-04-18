@@ -20,7 +20,9 @@ public sealed class ReversiController : IGameController
 
     public AiMode Mode { get; set; } = AiMode.AlphaBeta;
     public int AlphaBetaDepth { get; set; } = 4;
+    public int MaxDepth { get; set; } = 7;
     public int MonteCarloSimulations { get; set; } = 60;
+    public int MctsTimeLimitMs { get; set; } = 750;
 
     public bool IsGameOver { get; private set; }
 
@@ -44,7 +46,27 @@ public sealed class ReversiController : IGameController
     private ReversiBoard.Move? _pendingAiMove; // текущий ход ИИ
     private bool _hasPendingAiMove; // выполнен ли уже найденный ход
 
+    private readonly MctsSession<ReversiBoard, MoveRef> _mcts; // сеанс MCTS
+
     public bool IsAiTurn => !HumanVsHuman && !IsGameOver && _turn == _aiColor;
+
+    public ReversiController()
+    {
+        _mcts = new MctsSession<ReversiBoard, MoveRef>(
+            legalMoves: (pos, side) => pos.ValidMoves(side).Keys.Select(m => new MoveRef(m.X, m.Y)).ToList(),
+            applyMoveToCopy: (pos, move, side) =>
+            {
+                ReversiBoard child = pos.Copy();
+                child.ApplyMove(move.X, move.Y, side);
+                return child;
+            },
+            rolloutScore: ReversiMctsRolloutResult,
+            opponent: ReversiBoard.Opponent,
+            isTerminal: (pos, side) => pos.IsTerminal(),
+            positionKey: pos => pos.GetStateKey(),
+            canPass: true,
+            explorationConstant: Math.Sqrt(2.0));
+    }
 
     public void NewGame() // запуск новой игры, в т.ч. случайный выбор цвета игроков
     {
@@ -61,6 +83,7 @@ public sealed class ReversiController : IGameController
         // Для игры с ИИ - случайный выбор цветов игроков
         _humanColor = Random.Shared.Next(2) == 0 ? ReversiBoard.BLACK : ReversiBoard.WHITE;
         _aiColor = ReversiBoard.Opponent(_humanColor);
+        _mcts.Reset(); // перезапуск сеанса MCTS
 
     }
 
@@ -129,26 +152,25 @@ public sealed class ReversiController : IGameController
             return;
 
         _board.ApplyMove(row, col, _turn);
-        _turn = ReversiBoard.Opponent(_turn);
 
         ResolveTurn();
     }
 
-    public bool BeginAiTurnAnimation()
+    public bool BeginAiTurnAnimation() // Подготовить ход ИИ (в реверси нет анимированных ходов из нескольких шагов)
     {
         if (IsGameOver || _turn != _aiColor)
             return false;
 
         var legalMoves = _board.ValidMoves(_turn);
 
+        ReversiBoard.Move? bestMove = FindBestAiMove(legalMoves); // вызываем даже если ходов нет и это пас - для MCTS
+
         if (legalMoves.Count == 0)
         {
-            _turn = ReversiBoard.Opponent(_turn);
             ResolveTurn();
             return true;
         }
 
-        ReversiBoard.Move? bestMove = FindBestAiMove(legalMoves);
         if (bestMove is null)
             return false;
 
@@ -159,7 +181,7 @@ public sealed class ReversiController : IGameController
 
     public bool HasPendingAiAnimation => _hasPendingAiMove;
 
-    public bool ApplyNextAiAnimationStep()
+    public bool ApplyNextAiAnimationStep() // Отобразить на доске подготовленный ход ИИ
     {
         if (!_hasPendingAiMove || _pendingAiMove is null)
             return false;
@@ -168,7 +190,6 @@ public sealed class ReversiController : IGameController
         _pendingAiMove = null;
         _hasPendingAiMove = false;
 
-        _turn = ReversiBoard.Opponent(_turn);
         ResolveTurn();
 
         return true;
@@ -182,7 +203,7 @@ public sealed class ReversiController : IGameController
     {
         legalMoves ??= _board.ValidMoves(_turn);
 
-        if (legalMoves.Count == 0)
+        if (legalMoves.Count == 0 && Mode != AiMode.Mcts)
             return null;
 
         ReversiBoard.Move? bestMove = null;
@@ -211,7 +232,7 @@ public sealed class ReversiController : IGameController
             if (moveRef is not null)
                 bestMove = new ReversiBoard.Move(moveRef.X, moveRef.Y);
         }
-        else
+        else if (Mode == AiMode.MonteCarlo)
         {
             MoveRef? bestMoveRef = MonteCarlo.BestMove(
                 position: _board,
@@ -222,10 +243,17 @@ public sealed class ReversiController : IGameController
                     child.ApplyMove(move.X, move.Y, _aiColor);
                     return child;
                 },
-                playoutScore: ReversiPlayoutScore,
+                playoutScore: (pos, player, rng) =>
+                    ReversiMctsRolloutResult(pos, player, ReversiBoard.Opponent(player), rng),
                 player: _aiColor,
                 simulations: MonteCarloSimulations);
 
+            if (bestMoveRef is not null)
+                bestMove = new ReversiBoard.Move(bestMoveRef.X, bestMoveRef.Y);
+        }
+        else
+        {
+            MoveRef? bestMoveRef = _mcts.SearchBestMove(_board, _turn, _aiColor, MctsTimeLimitMs);
             if (bestMoveRef is not null)
                 bestMove = new ReversiBoard.Move(bestMoveRef.X, bestMoveRef.Y);
         }
@@ -233,7 +261,7 @@ public sealed class ReversiController : IGameController
         return bestMove;
     }
 
-    public bool MakeAiTurn()
+    public bool MakeAiTurn() // не используется, но может пригодиться для игр ИИ друг с другом
     {
         if (IsGameOver)
             return false;
@@ -242,19 +270,19 @@ public sealed class ReversiController : IGameController
             return false;
 
         var legalMoves = _board.ValidMoves(_turn);
+
+        ReversiBoard.Move? bestMove = FindBestAiMove(legalMoves); // вызываем даже если ходов нет и это пас - для MCTS
+
         if (legalMoves.Count == 0)
         {
-            _turn = ReversiBoard.Opponent(_turn);
             ResolveTurn();
             return true;
         }
 
-        ReversiBoard.Move? bestMove = FindBestAiMove(legalMoves);
         if (bestMove is null)
             return false;
 
         _board.ApplyMove(bestMove.Value.X, bestMove.Value.Y, _turn);
-        _turn = ReversiBoard.Opponent(_turn);
         ResolveTurn();
         return true;
     }
@@ -264,14 +292,19 @@ public sealed class ReversiController : IGameController
     /// </summary>
     private void ResolveTurn()
     {
-        if (_board.HasAnyMoves(_turn)) // если у текущего игрока есть допустимые ходы, он и должен ходить
+        _turn = ReversiBoard.Opponent(_turn); // ход сделан, передаём ход противнику
+
+        if (_board.HasAnyMoves(_turn)) // если у него есть допустимые ходы, он и должен ходить
             return;
 
         int opponent = ReversiBoard.Opponent(_turn);
 
-        if (_board.HasAnyMoves(opponent)) // если ходов нет, а у противника есть, то ходит противник
+        if (_board.HasAnyMoves(opponent)) // у текущего игрока ходов нет, но у противника есть
         {
-            _turn = opponent;
+            if (!HumanVsHuman && _turn == _aiColor)
+                return; // если нет ходов у ИИ, оставляем очередь хода у ИИ, чтобы он сделал пас - важно для MCTS
+
+            _turn = opponent; // если нет ходов у человека, то передаём ход противнику
             return;
         }
 
@@ -308,21 +341,24 @@ public sealed class ReversiController : IGameController
     }
 
     /// <summary>
-    /// Случайное доигрывание позиции для метода Монте-Карло. Возвращается результат с точки зрения игрока player
+    /// Случайное доигрывание позиции для Monte Carlo (sideToMove - чья очередь хода вначале)
+    /// Возвращается результат с точки зрения игрока player, от 0 до 1
+    /// Разница между количеством фишек учитывается с небольшим коэффициентом, главное - факт победы
     /// </summary>
-    private static double ReversiPlayoutScore(ReversiBoard position, int player, Random rng)
+    private static double ReversiMctsRolloutResult(ReversiBoard position, int player, int sideToMove, Random rng)
     {
         ReversiBoard simulation = position.Copy();
-        int side = ReversiBoard.Opponent(player);
+        int side = sideToMove;
 
-        const double AlphaMargin = 0.2;
+        const double alpha = 0.1;
 
         while (!simulation.IsTerminal())
         {
-            var legal = simulation.ValidMoves(side).Keys.ToList();
-            if (legal.Count > 0)
+            List<ReversiBoard.Move> moves = simulation.ValidMoves(side).Keys.ToList();
+
+            if (moves.Count > 0)
             {
-                ReversiBoard.Move choice = legal[rng.Next(legal.Count)];
+                ReversiBoard.Move choice = ChooseBiasedRolloutMove(moves, rng);
                 simulation.ApplyMove(choice.X, choice.Y, side);
             }
 
@@ -331,12 +367,62 @@ public sealed class ReversiController : IGameController
         }
 
         int diff = simulation.Count(player) - simulation.Count(ReversiBoard.Opponent(player));
-        double margin = AlphaMargin * diff / 64.0;
-        return diff > 0 ? (1.0 + margin) : diff == 0 ? (0.5 + margin) : (0.0 + margin);
+        double margin = alpha * diff / 64.0;
+
+        double value =
+            diff > 0 ? 1.0 - alpha + margin : // от 1-alpha до 1
+            diff == 0 ? 0.5 :
+            alpha + margin; // от 0 до alpha, здесь margin < 0
+
+        return Math.Clamp(value, 0.0, 1.0);
     }
 
     /// <summary>
-    /// Тип хода для алгоритмов ИИ
+    /// Является ли ход угловым, для предпочтений в случайных доигрываниях в MCTS
+    /// </summary>
+    private static bool IsCornerMove(ReversiBoard.Move move)
+    {
+        int last = ReversiBoard.BOARD_SIZE - 1;
+
+        return
+            (move.X == 0 && move.Y == 0) ||
+            (move.X == 0 && move.Y == last) ||
+            (move.X == last && move.Y == 0) ||
+            (move.X == last && move.Y == last);
+    }
+
+    /// <summary>
+    /// Выбрать ход для случайного доигрывания партии в MCTS, с предпочтением угловых ходов если они есть
+    /// </summary>
+    private static ReversiBoard.Move ChooseBiasedRolloutMove(List<ReversiBoard.Move> moves, Random rng)
+    {
+        if (moves.Count == 1)
+            return moves[0];
+
+        List<ReversiBoard.Move>? cornerMoves = null;
+
+        foreach (ReversiBoard.Move move in moves)
+        {
+            if (!IsCornerMove(move))
+                continue;
+
+            cornerMoves ??= new List<ReversiBoard.Move>();
+            cornerMoves.Add(move);
+        }
+
+        if (cornerMoves is not null &&
+            cornerMoves.Count > 0 &&
+            rng.NextDouble() < 0.5) // с какой вероятностью выбираем угловой ход, если он доступен
+        {
+            return cornerMoves[rng.Next(cornerMoves.Count)];
+        }
+
+        return moves[rng.Next(moves.Count)];
+    }
+
+
+    /// <summary>
+    /// Для AlphaBeta в данной реализации нужен именно класс
     /// </summary>
     private sealed class MoveRef
     {

@@ -14,28 +14,20 @@ public partial class MainForm : Form
     private bool _aiLoopRunning; // выполняется асинхронный цикл (чтобы не запустилось два сразу)
 
     private bool _playWithoutAi; // игра без ИИ
-
+    
     public MainForm()
     {
         InitializeComponent();
-
-        _controller = CreateControllerForSelectedGame(); // создаём контроллер для выбранной по умолчанию игры
-
-        _controller.HumanVsHuman = _playWithoutAi; // по умолчанию false, так что первая игра будет с ИИ
 
         InitializeBoardView(); // подключаем BoardView к панели
 
         BindUiEvents(); // подписка на события компонентов формы
 
-        ApplyControllerToBoardView(); // связываем контролер с BoardView
+        _controller = CreateController(); // создаём контроллер для выбранной по умолчанию игры
+        ApplyController(); // связываем контролер с BoardView
+        nudDepth.Maximum = _controller.MaxDepth; // максимальная глубина поиска для выбранной игры, чтобы не зависала
 
-        LoadDefaultsFromController(); // перенос значений по умолчанию из контролера в форму
-
-        _controller.NewGame(); // запуск новой игры
-
-        UpdateStatusAndParams(); // обновление надписи о цвете игрока
-
-        _ = MaybeRunAiLoopAsync(); // если игра начинается с хода ИИ
+        StartNewGame(withAi: true);
     }
 
     /// <summary>
@@ -46,11 +38,12 @@ public partial class MainForm : Form
         _playWithoutAi = !withAi;
 
         _controller.HumanVsHuman = _playWithoutAi;
-        _controller.NewGame();
+        UpdateAiParamsFromUi();
+        _controller.NewGame(); // запуск новой игры
 
-        UpdateStatusAndParams();
+        RefreshUiState();
         _boardView.Refresh();
-        _ = MaybeRunAiLoopAsync();
+        _ = MaybeRunAiLoop(); // если игра начинается с хода ИИ
     }
 
     private void InitializeBoardView()
@@ -83,55 +76,41 @@ public partial class MainForm : Form
                 SwitchGame();
         };
 
-        // переключение между алгоритмами ИИ.
+        // переключение между алгоритмами ИИ запускает новую игру
         rbAlphaBeta.CheckedChanged += (_, __) =>
         {
             if (rbAlphaBeta.Checked)
-            {
-                _controller.Mode = AiMode.AlphaBeta;
-                UpdateStatusAndParams();
-            }
+                StartNewGame(withAi: !_playWithoutAi);
         };
 
-        rbMonteCarlo.CheckedChanged += (_, __) =>
+        rbMcts.CheckedChanged += (_, __) =>
         {
-            if (rbMonteCarlo.Checked)
-            {
-                _controller.Mode = AiMode.MonteCarlo;
-                UpdateStatusAndParams();
-            }
+            if (rbMcts.Checked)
+                StartNewGame(withAi: !_playWithoutAi);
         };
 
         // изменение числовых параметров
         nudDepth.ValueChanged += (_, __) =>
         {
-            _controller.Mode = AiMode.AlphaBeta;
-            UpdateStatusAndParams();
+            _controller.AlphaBetaDepth = (int)nudDepth.Value;
         };
 
-        nudSims.ValueChanged += (_, __) =>
+        nudMctsMs.ValueChanged += (_, __) =>
         {
-            _controller.Mode = AiMode.MonteCarlo;
-            UpdateStatusAndParams();
+            _controller.MctsTimeLimitMs = (int)nudMctsMs.Value;
         };
 
         // щелчок на кнопке новой игры
-        btnNewGame.Click += (_, __) =>
-        {
-            StartNewGame(withAi: true);
-        };
+        btnNewGame.Click += (_, __) => StartNewGame(withAi: true);
 
         // щелчок на кнопке игры без ИИ
-        btnNoAiGame.Click += (_, __) =>
-        {
-            StartNewGame(withAi: false);
-        };
+        btnNoAiGame.Click += (_, __) => StartNewGame(withAi: false);
     }
 
     /// <summary>
     /// Создать контроллер для текущей выбранной игры
     /// </summary>
-    private IGameController CreateControllerForSelectedGame()
+    private IGameController CreateController()
     {
         GameKind kind;
 
@@ -156,43 +135,25 @@ public partial class MainForm : Form
     /// <summary>
     /// Связать текущий контроллер игры с контролом BoardView
     /// </summary>
-    private void ApplyControllerToBoardView()
+    private void ApplyController()
     {
         _boardView.BoardSize = _controller.BoardSize;
 
         // как рисовать доску
-        _boardView.DrawCallback = (g, rect) =>
-        {
-            _controller.Draw(g, rect);
-        };
+        _boardView.DrawCallback = (g, rect) => _controller.Draw(g, rect);
 
         // что делать при щелчке по клетке
         _boardView.CellClick = (row, col) =>
         {
+            if (_aiLoopRunning || _controller.IsGameOver) // во время хода ИИ и после конца игры щелчки не обрабатываем
+                return;
+
             _controller.HandleCellClick(row, col);
-            UpdateStatusAndParams();
+            RefreshUiState();
             _boardView.Refresh();
-            _ = MaybeRunAiLoopAsync();
+            lblStatus.Refresh(); // обновляем цвет надписи
+            _ = MaybeRunAiLoop();
         };
-    }
-
-    /// <summary>
-    /// Перенести значения параметров ИИ из контроллера в форму
-    /// </summary>
-    private void LoadDefaultsFromController()
-    {
-        rbAlphaBeta.Checked = _controller.Mode == AiMode.AlphaBeta;
-        rbMonteCarlo.Checked = _controller.Mode == AiMode.MonteCarlo;
-
-        nudDepth.Value = Math.Clamp(
-            _controller.AlphaBetaDepth,
-            (int)nudDepth.Minimum,
-            (int)nudDepth.Maximum);
-
-        nudSims.Value = Math.Clamp(
-            _controller.MonteCarloSimulations,
-            (int)nudSims.Minimum,
-            (int)nudSims.Maximum);
     }
 
     /// <summary>
@@ -200,31 +161,46 @@ public partial class MainForm : Form
     /// </summary>
     private void UpdateAiParamsFromUi()
     {
+        _controller.Mode = rbAlphaBeta.Checked ? AiMode.AlphaBeta : AiMode.Mcts;
         _controller.AlphaBetaDepth = (int)nudDepth.Value;
-        _controller.MonteCarloSimulations = (int)nudSims.Value;
+        _controller.MctsTimeLimitMs = (int)nudMctsMs.Value;
     }
 
     /// <summary>
-    /// Прочитать числовые параметры формы и обновить подпись, за какую сторону играет пользователь
+    /// Обновить форму и прочитать параметры ИИ из неё
     /// </summary>
-    private void UpdateStatusAndParams()
+    private void RefreshUiState()
     {
         UpdateAiParamsFromUi();
-        rbAlphaBeta.Checked = _controller.Mode == AiMode.AlphaBeta;
-        rbMonteCarlo.Checked = _controller.Mode == AiMode.MonteCarlo;
+        Text = $"{_controller.GameDisplayName} — Белые: {_controller.WhitePieceCount}, Чёрные: {_controller.BlackPieceCount}";
+
+        groupBox2.Enabled = !_controller.HumanVsHuman;
+
+        if (!_controller.HumanVsHuman)
+        {
+            nudDepth.Enabled = _controller.Mode == AiMode.AlphaBeta;
+            label1.Enabled = _controller.Mode == AiMode.AlphaBeta;
+            nudMctsMs.Enabled = _controller.Mode == AiMode.Mcts;
+            label3.Enabled = _controller.Mode == AiMode.Mcts;
+        }
+
+        if (_controller.IsGameOver)
+        {
+            lblStatus.Text = _controller.GameOverMessage ?? "Игра окончена";
+            lblStatus.ForeColor = Color.DarkGreen;
+            return;
+        }
 
         if (_controller.HumanVsHuman)
         {
-            if (!_controller.IsGameOver)
-                lblStatus.Text = "Ход: " + _controller.CurrentTurnDisplayName;
+            lblStatus.Text = "Ход: " + _controller.CurrentTurnDisplayName;
+            lblStatus.ForeColor = Color.DarkBlue;
+            return;
         }
-        else
-            lblStatus.Text = "Вы: " + _controller.HumanPlayerDisplayName;
 
-        Text = $"{_controller.GameDisplayName} — Белые: {_controller.WhitePieceCount}, Чёрные: {_controller.BlackPieceCount}";
-
-        groupBox2.Enabled = !_controller.HumanVsHuman; // заблокировать переключатели ИИ, если игра без ИИ
-
+        lblStatus.Text = "Вы: " + _controller.HumanPlayerDisplayName;
+        lblStatus.ForeColor = _controller.IsAiTurn ? Color.Black : Color.Crimson;
+       
     }
 
     /// <summary>
@@ -232,25 +208,24 @@ public partial class MainForm : Form
     /// </summary>
     private void SwitchGame()
     {
-        _controller = CreateControllerForSelectedGame();
-        _controller.HumanVsHuman = _playWithoutAi;
-        ApplyControllerToBoardView();
-        LoadDefaultsFromController();
-        _controller.NewGame();
-        UpdateStatusAndParams();
-        _boardView.Refresh();
-        _ = MaybeRunAiLoopAsync();
+        _controller = CreateController();
+        ApplyController();
+        nudDepth.Maximum = _controller.MaxDepth; // максимальная глубина поиска для выбранной игры, чтобы не зависала
+        StartNewGame(withAi: !_playWithoutAi);
     }
 
     /// <summary>
     /// Асинхронный цикл хода ИИ, с небольшой задержкой без блокирования окна. Может быть несколько ходов подряд
     /// </summary>
-    private async Task MaybeRunAiLoopAsync()
+    private async Task MaybeRunAiLoop()
     {
         if (_aiLoopRunning)
             return;
 
         _aiLoopRunning = true;
+        RefreshUiState();
+        lblStatus.Refresh();
+
         try
         {
             while (_controller.IsAiTurn && !_controller.IsGameOver)
@@ -258,7 +233,7 @@ public partial class MainForm : Form
                 await Task.Yield(); // пусть графический интерфейс обновит доску и не блокируется
                 bool changed = _controller.BeginAiTurnAnimation();
 
-                UpdateStatusAndParams();
+                RefreshUiState();
                 _boardView.Refresh();
 
                 if (!changed)
@@ -271,7 +246,7 @@ public partial class MainForm : Form
 
                     bool stepChanged = _controller.ApplyNextAiAnimationStep();
 
-                    UpdateStatusAndParams();
+                    RefreshUiState();
                     _boardView.Refresh();
 
                     if (!stepChanged)
@@ -291,6 +266,7 @@ public partial class MainForm : Form
         finally
         {
             _aiLoopRunning = false;
+            RefreshUiState();
         }
     }
 

@@ -21,7 +21,9 @@ public sealed class CornersController : IGameController
 
     public AiMode Mode { get; set; } = AiMode.AlphaBeta;
     public int AlphaBetaDepth { get; set; } = 4;
+    public int MaxDepth { get; set; } = 6;
     public int MonteCarloSimulations { get; set; } = 60;
+    public int MctsTimeLimitMs { get; set; } = 750;
 
     public bool IsGameOver { get; private set; }
 
@@ -59,10 +61,34 @@ public sealed class CornersController : IGameController
     /// </summary>
     private CornersBoard.MoveChain? _executedTurn;
 
+    private (int Row, int Col)? _currentMoveOrigin; // исходная клетка текущего полного хода
+
+    private readonly HashSet<CornersBoard.Square> _visitedSquares = new(); // множество уже посещённых клеток в текущем ходе
+
     private CornersBoard.MoveChain? _pendingAiMove; // текущий ход ИИ, для анимации
     private int _pendingAiStepIndex; // текущий шаг в ходе ИИ, для анимации
 
+    private readonly MctsSession<CornersBoard, CornersBoard.MoveChain> _mcts; // сеанс MCTS
+
     public bool IsAiTurn => !HumanVsHuman && !IsGameOver && _turn == _aiColor;
+
+    public CornersController()
+    {
+        _mcts = new MctsSession<CornersBoard, CornersBoard.MoveChain>(
+            legalMoves: (pos, side) => pos.AllMoves(side),
+            applyMoveToCopy: (pos, move, side) =>
+            {
+                CornersBoard child = pos.Copy();
+                child.ApplyChain(move, side);
+                return child;
+            },
+            rolloutScore: CornersMctsRolloutResult,
+            opponent: CornersBoard.Opponent,
+            isTerminal: (pos, side) => pos.IsTerminal(),
+            positionKey: pos => pos.GetStateKey(),
+            canPass: false,
+            explorationConstant: Math.Sqrt(2.0));
+    }
 
     public void NewGame() // Запуск новой игры, в т.ч. случайный выбор цвета игроков
     {
@@ -75,13 +101,14 @@ public sealed class CornersController : IGameController
         _selectedPiece = null;
         _possibleMoves.Clear();
         _jumpContinuationMode = false;
-        _executedTurn = null;
+        ResetExecutedTurn();
 
         _pendingAiMove = null;
 
         // _humanColor и _aiColor используются только в режиме игры с ИИ
         _humanColor = Random.Shared.Next(2) == 0 ? CornersBoard.WHITE : CornersBoard.BLACK;
         _aiColor = CornersBoard.Opponent(_humanColor);
+        _mcts.Reset(); // перезапуск сеанса MCTS
     }
 
     public void Draw(Graphics g, Rectangle rect)  // Отрисовка доски
@@ -222,7 +249,7 @@ public sealed class CornersController : IGameController
         if (!_jumpContinuationMode && _board.Grid[row, col] == _turn)
         {
             _selectedPiece = (row, col);
-            _executedTurn = null;
+            ResetExecutedTurn();
 
             List<CornersBoard.MoveChain> allMoves = _board.AllMoves(_turn);
             _possibleMoves = allMoves
@@ -251,7 +278,6 @@ public sealed class CornersController : IGameController
             // На уже посещённые клетки нельзя возвращаться в течение того же самого прыжка
             // Если допустимых продолжений нет, ход завершается
 
-            HashSet<CornersBoard.Square> visited = VisitedSquares();
             (int startRow, int startCol) = MoveOrigin();
 
             List<CornersBoard.MoveChain> continuations =
@@ -262,7 +288,7 @@ public sealed class CornersController : IGameController
                     startRow,
                     startCol,
                     currentSequence: null,
-                    visitedSquares: visited);
+                    visitedSquares: _visitedSquares);
 
             if (continuations.Count > 0)
             {
@@ -316,43 +342,45 @@ public sealed class CornersController : IGameController
     /// </summary>
     private (int Row, int Col) MoveOrigin()
     {
-        if (_executedTurn is not null && _executedTurn.Steps.Count > 0)
-        {
-            CornersBoard.MoveStep first = _executedTurn.Steps[0];
-            return (first.R1, first.C1);
-        }
-
-        if (_selectedPiece is (int row, int col))
+        if (_currentMoveOrigin is (int row, int col))
             return (row, col);
+
+        if (_selectedPiece is (int selectedRow, int selectedCol))
+            return (selectedRow, selectedCol); // если ход ещё не начался, но фишка выбрана
 
         throw new InvalidOperationException("Не удалось определить исходную клетку текущего хода");
     }
 
-    private HashSet<CornersBoard.Square> VisitedSquares() // уже посещённые клетки в текущем прыжке
-    {
-        HashSet<CornersBoard.Square> visited = new();
-
-        if (_executedTurn is null || _executedTurn.Steps.Count == 0)
-            return visited;
-
-        CornersBoard.MoveStep first = _executedTurn.Steps[0];
-        visited.Add(new CornersBoard.Square(first.R1, first.C1));
-
-        foreach (CornersBoard.MoveStep step in _executedTurn.Steps)
-            visited.Add(new CornersBoard.Square(step.R2, step.C2));
-
-        return visited;
-    }
-
+    /// <summary>
+    /// Инициализирует полный ход _executedTurn, запоминает стартовую клетку _currentMoveOrigin,
+    /// поддерживает множество посещённых клеток _visitedSquares
+    /// </summary>
     private void AppendExecutedStep(CornersBoard.MoveStep step)
     {
-        if (_executedTurn is null)
-            _executedTurn = new CornersBoard.MoveChain(new[] { step });
-        else
-            _executedTurn.Steps.Add(step);
+        _executedTurn ??= new CornersBoard.MoveChain(Array.Empty<CornersBoard.MoveStep>());
+
+        if (_executedTurn.Steps.Count == 0)
+        {
+            _currentMoveOrigin = (step.R1, step.C1);
+            _visitedSquares.Clear();
+            _visitedSquares.Add(new CornersBoard.Square(step.R1, step.C1));
+        }
+
+        _executedTurn.Steps.Add(step);
+        _visitedSquares.Add(new CornersBoard.Square(step.R2, step.C2));
     }
 
-    public bool MakeAiTurn()
+    /// <summary>
+    /// Очистка описания полного хода _executedTurn , _currentMoveOrigin , _visitedSquares 
+    /// </summary>
+    private void ResetExecutedTurn()
+    {
+        _executedTurn = null;
+        _currentMoveOrigin = null;
+        _visitedSquares.Clear();
+    }
+
+    public bool MakeAiTurn() // не используется, но может пригодиться для игр ИИ друг с другом
     {
         if (IsGameOver || _turn != _aiColor)
             return false;
@@ -406,72 +434,119 @@ public sealed class CornersController : IGameController
 
             return move;
         }
-
-        return MonteCarlo.BestMove(
-            position: _board,
-            legalMoves: (pos, side) => pos.AllMoves(side),
-            applyMoveToCopy: (pos, move) =>
-            {
-                CornersBoard child = pos.Copy();
-                child.ApplyChain(move, _aiColor);
-                return child;
-            },
-            playoutScore: CornersPlayoutScore,
-            player: _aiColor,
-            simulations: MonteCarloSimulations);
+        else if (Mode == AiMode.MonteCarlo)
+        {
+            return MonteCarlo.BestMove(
+                position: _board,
+                legalMoves: (pos, side) => pos.AllMoves(side),
+                applyMoveToCopy: (pos, move) =>
+                {
+                    CornersBoard child = pos.Copy();
+                    child.ApplyChain(move, _aiColor);
+                    return child;
+                },
+                playoutScore: (pos, player, rng) =>
+                CornersMctsRolloutResult(pos, player, CornersBoard.Opponent(player), rng),
+                player: _aiColor,
+                simulations: MonteCarloSimulations);
+        }
+        else
+            return _mcts.SearchBestMove(_board, _turn, _aiColor, MctsTimeLimitMs);
     }
 
+
     /// <summary>
-    /// Случайное доигрывание позиции для метода Монте-Карло. Возвращается результат с точки зрения игрока player
+    /// Случайное доигрывание позиции для Monte Carlo (sideToMove - чья очередь хода вначале)
+    /// Возвращается результат с точки зрения игрока player, от 0 до 1
     /// </summary>
-    private static double CornersPlayoutScore(CornersBoard position, int player, Random rng)
+    private static double CornersMctsRolloutResult(CornersBoard position, int player, int sideToMove, Random rng)
     {
         CornersBoard simulation = position.Copy();
-        int side = CornersBoard.Opponent(player);
+        int side = sideToMove;
 
-        while (true)
+        const double alpha = 0.2;
+        int? winner = null;
+
+        for (int ply = 0; ply < 15 ; ply++) // для Уголков ограничиваем доигрывание 15 ходами
         {
             if (simulation.IsTerminal())
             {
-                return CornersTerminalScore(simulation, player);
+                winner = simulation.GetWinner();
+                break;
             }
 
             List<CornersBoard.MoveChain> moves = simulation.AllMoves(side);
-            if (moves.Count == 0)
+
+            if (moves.Count > 0)
             {
-                int winner = CornersBoard.Opponent(side);
-                return winner == player ? 1.0 : -1.0;
+                CornersBoard.MoveChain randomMove = ChooseBiasedRolloutMove(simulation, side, moves, rng);
+                simulation.ApplyChain(randomMove, side);
+                side = CornersBoard.Opponent(side);
             }
-
-            CornersBoard.MoveChain randomMove = moves[rng.Next(moves.Count)];
-            simulation.ApplyChain(randomMove, side);
-
-            side = CornersBoard.Opponent(side);
+            else
+            {
+                winner = CornersBoard.Opponent(side);
+                break;
+            }
         }
+
+        int myDist = simulation.SumDistanceToGoal(player);
+        int oppDist = simulation.SumDistanceToGoal(CornersBoard.Opponent(player));
+        double margin = alpha * (oppDist - myDist) / (myDist + oppDist + 1.0);
+
+        if (winner is null)
+            return 0.5 + margin; // около 0.5 при ничье, обычно от 1-a до 1 при победе, обычно от 0 до a при поражении
+        else
+            return winner == player ? 1.0 - alpha + margin : alpha + margin ;
+
     }
 
     /// <summary>
-    /// Вспомогательный метод для оценки позиции в конце игры, применяемый в методе Монте-Карло
+    /// Выбор хода для Rollout: чем сильнее ход уменьшает расстояние до цели, тем больше вес, но все ходы возможны
     /// </summary>
-    private static double CornersTerminalScore(CornersBoard board, int player)
+    private static CornersBoard.MoveChain ChooseBiasedRolloutMove(
+        CornersBoard position,
+        int side,
+        List<CornersBoard.MoveChain> moves,
+        Random rng)
     {
-        int opponent = CornersBoard.Opponent(player);
+        if (moves.Count == 1)
+            return moves[0];
 
-        int myGoal = board.CountInGoalHome(player);
-        int oppGoal = board.CountInGoalHome(opponent);
+        double[] weights = new double[moves.Count];
+        double totalWeight = 0.0;
 
-        double goalMargin = (myGoal - oppGoal) / 9.0;
+        for (int i = 0; i < moves.Count; i++)
+        {
+            double h = position.NormalizedMoveDeltaDist(side, moves[i]); // [-1, 1]
+            weights[i] = 0.5 * (h + 1.0);
+            totalWeight += weights[i];
+        }
 
-        const double AlphaGoal = 0.20;
+        if (totalWeight <= 0.0)
+            return moves[rng.Next(moves.Count)];
 
-        int? winner = board.GetWinner();
-
-        if (winner is null)
-            return 0.0;
-
-        double baseScore = winner == player ? 1.0 : -1.0;
-        return baseScore + AlphaGoal * goalMargin;
+        int index = ChooseWeightedIndex(weights, totalWeight, rng);
+        return moves[index];
     }
+
+    /// <summary>
+    /// Выбрать индекс по положительным весам
+    /// </summary>
+    private static int ChooseWeightedIndex(double[] weights, double totalWeight, Random rng)
+    {
+        double r = rng.NextDouble() * totalWeight;
+
+        for (int i = 0; i < weights.Length; i++)
+        {
+            r -= weights[i];
+            if (r <= 0.0)
+                return i;
+        }
+
+        return weights.Length - 1;
+    }
+
 
     private void FinishTurn() // завершение хода
     {
@@ -493,7 +568,7 @@ public sealed class CornersController : IGameController
         _selectedPiece = null;
         _possibleMoves.Clear();
         _jumpContinuationMode = false;
-        _executedTurn = null;
+        ResetExecutedTurn();
     }
 
     /// <summary>

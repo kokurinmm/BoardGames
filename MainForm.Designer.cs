@@ -33,11 +33,11 @@
             rbReversi = new RadioButton();
             rbCheckers = new RadioButton();
             groupBox2 = new GroupBox();
-            nudSims = new NumericUpDown();
-            label2 = new Label();
+            nudMctsMs = new NumericUpDown();
+            label3 = new Label();
+            rbMcts = new RadioButton();
             nudDepth = new NumericUpDown();
             label1 = new Label();
-            rbMonteCarlo = new RadioButton();
             rbAlphaBeta = new RadioButton();
             lblStatus = new Label();
             pnlBoard = new Panel();
@@ -45,7 +45,7 @@
             btnNoAiGame = new Button();
             groupBox1.SuspendLayout();
             groupBox2.SuspendLayout();
-            ((System.ComponentModel.ISupportInitialize)nudSims).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)nudMctsMs).BeginInit();
             ((System.ComponentModel.ISupportInitialize)nudDepth).BeginInit();
             SuspendLayout();
             // 
@@ -97,11 +97,11 @@
             // 
             // groupBox2
             // 
-            groupBox2.Controls.Add(nudSims);
-            groupBox2.Controls.Add(label2);
+            groupBox2.Controls.Add(nudMctsMs);
+            groupBox2.Controls.Add(label3);
+            groupBox2.Controls.Add(rbMcts);
             groupBox2.Controls.Add(nudDepth);
             groupBox2.Controls.Add(label1);
-            groupBox2.Controls.Add(rbMonteCarlo);
             groupBox2.Controls.Add(rbAlphaBeta);
             groupBox2.Location = new Point(12, 147);
             groupBox2.Name = "groupBox2";
@@ -110,31 +110,45 @@
             groupBox2.TabStop = false;
             groupBox2.Text = "Алгоритм ИИ";
             // 
-            // nudSims
+            // nudMctsMs
             // 
-            nudSims.Location = new Point(121, 146);
-            nudSims.Maximum = new decimal(new int[] { 200, 0, 0, 0 });
-            nudSims.Minimum = new decimal(new int[] { 2, 0, 0, 0 });
-            nudSims.Name = "nudSims";
-            nudSims.Size = new Size(74, 31);
-            nudSims.TabIndex = 5;
-            nudSims.Value = new decimal(new int[] { 60, 0, 0, 0 });
+            nudMctsMs.Increment = new decimal(new int[] { 250, 0, 0, 0 });
+            nudMctsMs.Location = new Point(150, 155);
+            nudMctsMs.Maximum = new decimal(new int[] { 10000, 0, 0, 0 });
+            nudMctsMs.Minimum = new decimal(new int[] { 250, 0, 0, 0 });
+            nudMctsMs.Name = "nudMctsMs";
+            nudMctsMs.ReadOnly = true;
+            nudMctsMs.Size = new Size(74, 31);
+            nudMctsMs.TabIndex = 8;
+            nudMctsMs.Value = new decimal(new int[] { 750, 0, 0, 0 });
             // 
-            // label2
+            // label3
             // 
-            label2.AutoSize = true;
-            label2.Location = new Point(10, 146);
-            label2.Name = "label2";
-            label2.Size = new Size(108, 25);
-            label2.TabIndex = 4;
-            label2.Text = "Симуляций:";
+            label3.AutoSize = true;
+            label3.Location = new Point(10, 155);
+            label3.Name = "label3";
+            label3.Size = new Size(125, 25);
+            label3.TabIndex = 7;
+            label3.Text = "Миллисекунд:";
+            // 
+            // rbMcts
+            // 
+            rbMcts.AutoSize = true;
+            rbMcts.Location = new Point(12, 120);
+            rbMcts.Name = "rbMcts";
+            rbMcts.Size = new Size(228, 29);
+            rbMcts.TabIndex = 6;
+            rbMcts.TabStop = true;
+            rbMcts.Text = "Monte Carlo Tree Search";
+            rbMcts.UseVisualStyleBackColor = true;
             // 
             // nudDepth
             // 
-            nudDepth.Location = new Point(121, 65);
-            nudDepth.Maximum = new decimal(new int[] { 10, 0, 0, 0 });
-            nudDepth.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
+            nudDepth.Location = new Point(120, 70);
+            nudDepth.Maximum = new decimal(new int[] { 8, 0, 0, 0 });
+            nudDepth.Minimum = new decimal(new int[] { 2, 0, 0, 0 });
             nudDepth.Name = "nudDepth";
+            nudDepth.ReadOnly = true;
             nudDepth.Size = new Size(74, 31);
             nudDepth.TabIndex = 3;
             nudDepth.Value = new decimal(new int[] { 4, 0, 0, 0 });
@@ -142,39 +156,28 @@
             // label1
             // 
             label1.AutoSize = true;
-            label1.Location = new Point(10, 67);
+            label1.Location = new Point(10, 70);
             label1.Name = "label1";
             label1.Size = new Size(81, 25);
             label1.TabIndex = 2;
             label1.Text = "Глубина:";
             // 
-            // rbMonteCarlo
-            // 
-            rbMonteCarlo.AutoSize = true;
-            rbMonteCarlo.Location = new Point(10, 114);
-            rbMonteCarlo.Name = "rbMonteCarlo";
-            rbMonteCarlo.Size = new Size(145, 29);
-            rbMonteCarlo.TabIndex = 1;
-            rbMonteCarlo.TabStop = true;
-            rbMonteCarlo.Text = "Монте Карло";
-            rbMonteCarlo.UseVisualStyleBackColor = true;
-            // 
             // rbAlphaBeta
             // 
             rbAlphaBeta.AutoSize = true;
             rbAlphaBeta.Checked = true;
-            rbAlphaBeta.Location = new Point(10, 35);
+            rbAlphaBeta.Location = new Point(12, 35);
             rbAlphaBeta.Name = "rbAlphaBeta";
-            rbAlphaBeta.Size = new Size(130, 29);
+            rbAlphaBeta.Size = new Size(125, 29);
             rbAlphaBeta.TabIndex = 0;
             rbAlphaBeta.TabStop = true;
-            rbAlphaBeta.Text = "Альфа-бета";
+            rbAlphaBeta.Text = "Alpha-beta";
             rbAlphaBeta.UseVisualStyleBackColor = true;
             // 
             // lblStatus
             // 
             lblStatus.BorderStyle = BorderStyle.FixedSingle;
-            lblStatus.Font = new Font("Segoe UI", 12F);
+            lblStatus.Font = new Font("Segoe UI", 12F, FontStyle.Bold);
             lblStatus.Location = new Point(14, 369);
             lblStatus.Name = "lblStatus";
             lblStatus.Size = new Size(259, 39);
@@ -225,7 +228,7 @@
             groupBox1.PerformLayout();
             groupBox2.ResumeLayout(false);
             groupBox2.PerformLayout();
-            ((System.ComponentModel.ISupportInitialize)nudSims).EndInit();
+            ((System.ComponentModel.ISupportInitialize)nudMctsMs).EndInit();
             ((System.ComponentModel.ISupportInitialize)nudDepth).EndInit();
             ResumeLayout(false);
         }
@@ -236,16 +239,16 @@
         private RadioButton rbReversi;
         private RadioButton rbCheckers;
         private GroupBox groupBox2;
-        private RadioButton rbMonteCarlo;
         private RadioButton rbAlphaBeta;
         private Label label1;
-        private Label label2;
         private NumericUpDown nudDepth;
-        private NumericUpDown nudSims;
         private Label lblStatus;
         private Panel pnlBoard;
         private Button btnNewGame;
         private Button btnNoAiGame;
         private RadioButton rbCorners;
+        private RadioButton rbMcts;
+        private NumericUpDown nudMctsMs;
+        private Label label3;
     }
 }

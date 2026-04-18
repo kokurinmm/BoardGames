@@ -3,7 +3,7 @@
 namespace BoardGames;
 
 /// <summary>
-/// Временный тестовый контроллер
+/// Временный тестовый контроллер. Был нужен в самом начале, в настоящей версии программы не используется
 /// </summary>
 public sealed class TestController : IGameController
 {
@@ -18,7 +18,9 @@ public sealed class TestController : IGameController
 
     public AiMode Mode { get; set; } = AiMode.AlphaBeta;
     public int AlphaBetaDepth { get; set; } = 3;
+    public int MaxDepth { get; set; } = 3;
     public int MonteCarloSimulations { get; set; } = 50;
+    public int MctsTimeLimitMs { get; set; } = 750;
 
     public bool IsGameOver => false;
     public bool IsAiTurn => false;

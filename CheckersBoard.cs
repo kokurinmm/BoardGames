@@ -24,9 +24,16 @@ public sealed class CheckersBoard
     public const int BLACK = -1;
 
     /// <summary>
-    /// Содержимое доски (первый индекс — номер строки, второй — номер столбца)
+    /// Содержимое доски (первый индекс - номер строки, второй - номер столбца)
     /// </summary>
     public int[,] Grid { get; } = new int[BOARD_SIZE, BOARD_SIZE];
+
+    /// <summary>
+    /// Количество сделанных подряд ходов только дамками без взятий. Как только достигает DRAW_NUM, объявляется ничья
+    /// </summary>
+    public int QuietMoves { get; private set; }
+
+    public const int DRAW_NUM = 15; // количество тихих дамочных ходов для объявления ничьи
 
     public CheckersBoard()
     {
@@ -80,12 +87,13 @@ public sealed class CheckersBoard
     }
 
     /// <summary>
-    /// Копирование доски
+    /// Копирование доски и антиничейной информации
     /// </summary>
     public CheckersBoard Copy()
     {
         CheckersBoard board = new CheckersBoard();
         Array.Copy(Grid, board.Grid, Grid.Length);
+        board.QuietMoves = QuietMoves;
         return board;
     }
 
@@ -318,8 +326,16 @@ public sealed class CheckersBoard
     /// </summary>
     public void ApplyChain(MoveChain chain)
     {
+        if (chain.Steps.Count == 0)
+            return;
+
+        MoveStep first = chain.Steps[0];
+        int movingPiece = Grid[first.R1, first.C1];
+
         foreach (MoveStep step in chain.Steps)
             ApplyStep(step);
+
+        UpdateQuietCount(first, movingPiece);
     }
 
     /// <summary>
@@ -332,6 +348,9 @@ public sealed class CheckersBoard
 
         if (moves.Count == 0)
             return sideToMove == rootPlayer ? -M : +M; // проигрыш, если некуда ходить
+
+        if (QuietMoves >= DRAW_NUM)
+            return 0.0; // ничья по правилу 15 ходов
 
         int opponent = Opponent(rootPlayer);
 
@@ -421,4 +440,32 @@ public sealed class CheckersBoard
 
         return total;
     }
+
+    /// <summary>
+    /// Текстовый ключ состояния позиции. Нужен MCTS для переиспользования дерева между ходами
+    /// </summary>
+    public string GetStateKey()
+    {
+        StringBuilder sb = new StringBuilder(BOARD_SIZE * BOARD_SIZE * 2 + 4);
+
+        for (int row = 0; row < BOARD_SIZE; row++)
+            for (int col = 0; col < BOARD_SIZE; col++)
+                sb.Append(Grid[row, col]).Append(',');
+
+        sb.Append('|').Append(QuietMoves);
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Обновить счётчик тихих ходов, movingPiece - тип фишки до начала хода
+    /// </summary>
+    public void UpdateQuietCount(MoveStep step, int movingPiece)
+    {
+        if (IsKing(movingPiece) && step.Captured is null)
+            QuietMoves++;
+        else
+            QuietMoves = 0;
+    }
+
 }
