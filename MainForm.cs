@@ -15,8 +15,6 @@ public partial class MainForm : Form
 
     private bool _playWithoutAi; // игра без ИИ
     
-    private bool _syncingUi; // возможно изменение значения на счётчиках из контроллера, которое не должно вызывать событие
-
     public MainForm()
     {
         InitializeComponent();
@@ -27,7 +25,7 @@ public partial class MainForm : Form
 
         _controller = CreateController(); // создаём контроллер для выбранной по умолчанию игры
         ApplyController(); // связываем контролер с BoardView
-        LoadDefaultsFromController(); // перенос значений по умолчанию из контролера в форму
+        nudDepth.Maximum = _controller.MaxDepth; // максимальная глубина поиска для выбранной игры, чтобы не зависала
 
         StartNewGame(withAi: true);
     }
@@ -94,15 +92,11 @@ public partial class MainForm : Form
         // изменение числовых параметров
         nudDepth.ValueChanged += (_, __) =>
         {
-            if (_syncingUi)
-                return;
             _controller.AlphaBetaDepth = (int)nudDepth.Value;
         };
 
         nudMctsMs.ValueChanged += (_, __) =>
         {
-            if (_syncingUi)
-                return;
             _controller.MctsTimeLimitMs = (int)nudMctsMs.Value;
         };
 
@@ -151,7 +145,7 @@ public partial class MainForm : Form
         // что делать при щелчке по клетке
         _boardView.CellClick = (row, col) =>
         {
-            if (_aiLoopRunning) // во время хода ИИ щелчки не обрабатываем
+            if (_aiLoopRunning || _controller.IsGameOver) // во время хода ИИ и после конца игры щелчки не обрабатываем
                 return;
 
             _controller.HandleCellClick(row, col);
@@ -160,30 +154,6 @@ public partial class MainForm : Form
             lblStatus.Refresh(); // обновляем цвет надписи
             _ = MaybeRunAiLoop();
         };
-    }
-
-    /// <summary>
-    /// Перенести значения параметров ИИ из контроллера в форму
-    /// </summary>
-    private void LoadDefaultsFromController()
-    {
-        _syncingUi = true; // будем изменять значения в счётчиках, события вызывать не нужно
-        try
-        {
-            nudDepth.Value = Math.Clamp(
-                _controller.AlphaBetaDepth,
-                (int)nudDepth.Minimum,
-                (int)nudDepth.Maximum);
-
-            nudMctsMs.Value = Math.Clamp(
-                _controller.MctsTimeLimitMs,
-                (int)nudMctsMs.Minimum,
-                (int)nudMctsMs.Maximum);
-        }
-        finally
-        {
-            _syncingUi = false; // обработку изменения значений счётчиков обязательно нужно вернуть
-        }
     }
 
     /// <summary>
@@ -240,7 +210,7 @@ public partial class MainForm : Form
     {
         _controller = CreateController();
         ApplyController();
-        LoadDefaultsFromController();
+        nudDepth.Maximum = _controller.MaxDepth; // максимальная глубина поиска для выбранной игры, чтобы не зависала
         StartNewGame(withAi: !_playWithoutAi);
     }
 

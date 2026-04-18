@@ -402,7 +402,7 @@ public sealed class CornersBoard
     public bool HasBuiltGoalHouse(int player) => CountInGoalHome(player) == PIECES_PER_PLAYER;
 
     /// <summary>
-    /// Сколько шашек игрока находится в доме соперника
+    /// Сколько фишек игрока находится в доме соперника
     /// </summary>
     public int CountInGoalHome(int player)
     {
@@ -417,7 +417,7 @@ public sealed class CornersBoard
     }
 
     /// <summary>
-    /// Сколько шашек игрока ещё осталось в его собственном доме
+    /// Сколько фишек игрока ещё осталось в его собственном доме
     /// </summary>
     public int CountInOwnHome(int player)
     {
@@ -477,7 +477,7 @@ public sealed class CornersBoard
     }
 
     /// <summary>
-    /// Нарушил ли игрок правило "за 40 ходов вывести все шашки из своего дома"
+    /// Нарушил ли игрок правило "за 40 ходов вывести все фишки из своего дома"
     /// </summary>
     public bool FailedHomeExitDeadline(int player)
     {
@@ -678,9 +678,9 @@ public sealed class CornersBoard
     }
 
     /// <summary>
-    /// Сумма расстояний всех шашек игрока до цели
+    /// Сумма расстояний всех фишек игрока до цели
     /// </summary>
-    private int SumDistanceToGoal(int player)
+    public int SumDistanceToGoal(int player)
     {
         int total = 0;
 
@@ -690,6 +690,21 @@ public sealed class CornersBoard
                     total += DistanceToGoal(player, row, col);
 
         return total;
+    }
+
+    // Оценка хода, от -1 до 1, для MCTS
+    public double NormalizedMoveDeltaDist(int player, MoveChain move)
+    {
+        if (move is null || move.Steps.Count == 0)
+            return 0.0;
+
+        MoveStep first = move.Steps[0];
+        MoveStep last = move.Steps[^1];
+
+        int before = DistanceToGoal(player, first.R1, first.C1);
+        int after = DistanceToGoal(player, last.R2, last.C2);
+
+        return Math.Clamp((before - after) / 10.0, -1.0, 1.0);
     }
 
     /// <summary>
@@ -726,7 +741,7 @@ public sealed class CornersBoard
     }
 
     /// <summary>
-    /// Расстояние до цели для самой отстающей шашки
+    /// Расстояние до цели для самой отстающей фишки
     /// </summary>
     private int FarthestPieceDistanceToGoal(int player)
     {

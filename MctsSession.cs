@@ -108,32 +108,9 @@ public sealed class MctsSession<TPos, TMove> where TMove : class
         {
             Node? passChild = _root.Children.FirstOrDefault(ch =>
                 ch.MoveFromParent is null && ch.SideToMove == _opponent(_root.SideToMove));
-
-                        
+                                    
             if (passChild is not null)
-            {
                 AdvanceRootToPosition(passChild.Position, passChild.SideToMove);
-                
-
-                System.Diagnostics.Debug.WriteLine(
-                $"PASS: passChild найден, " +
-                $"children={passChild.Children.Count}, " +
-                $"movesInitialized={passChild.MovesInitialized}, " +
-                $"unexpanded={(passChild.UnexpandedMoves?.Count ?? -1)}, " +
-                $"visits={passChild.Visits}");
-
-
-            }
-            else
-            {
-                
-
-                Debug.WriteLine(
-                        $"PASS: passChild НЕ найден, root visits={_root.Visits}, " +
-                        $"children={_root.Children.Count}, passExpanded={_root.PassExpanded}");
-
-
-            }
 
             return null;
         }
@@ -166,17 +143,6 @@ public sealed class MctsSession<TPos, TMove> where TMove : class
         if (bestChild is not null)
             AdvanceRootToPosition(bestChild.Position, bestChild.SideToMove);
 
-        
-
-        if (bestChild is not null)
-        {
-            System.Diagnostics.Debug.WriteLine(
-                $"BEST: child side={bestChild.SideToMove}, visits={bestChild.Visits}, " +
-                $"children={bestChild.Children.Count}, move={(bestChild.MoveFromParent is null ? "PASS" : "MOVE")}");
-        }
-
-
-
         return bestChild?.MoveFromParent;
     }
 
@@ -191,10 +157,8 @@ public sealed class MctsSession<TPos, TMove> where TMove : class
         {
             _root = CreateRoot(position, sideToMove);
 
-
-            System.Diagnostics.Debug.WriteLine($"MCTS: дерева не было, создан новый корень. Side={sideToMove}");
-            System.Diagnostics.Debug.WriteLine($"MCTS root: Visits={_root.Visits}, Children={_root.Children.Count}, Side={_root.SideToMove}");
-
+            // System.Diagnostics.Debug.WriteLine($"MCTS: дерева не было, создан новый корень. Side={sideToMove}");
+            // System.Diagnostics.Debug.WriteLine($"MCTS root: Visits={_root.Visits}, Children={_root.Children.Count}, Side={_root.SideToMove}");
 
             return;
         }
@@ -203,10 +167,8 @@ public sealed class MctsSession<TPos, TMove> where TMove : class
         if (_root.PositionKey == key && _root.SideToMove == sideToMove)
         {
 
-
-            System.Diagnostics.Debug.WriteLine($"MCTS: корень уже соответствует текущей позиции. Visits={_root.Visits}, Children={_root.Children.Count}");
-            System.Diagnostics.Debug.WriteLine($"MCTS root: Visits={_root.Visits}, Children={_root.Children.Count}, Side={_root.SideToMove}");
-
+            // System.Diagnostics.Debug.WriteLine($"MCTS: корень уже соответствует текущей позиции. Visits={_root.Visits}, Children={_root.Children.Count}");
+            // System.Diagnostics.Debug.WriteLine($"MCTS root: Visits={_root.Visits}, Children={_root.Children.Count}, Side={_root.SideToMove}");
 
             return;
         }
@@ -217,28 +179,14 @@ public sealed class MctsSession<TPos, TMove> where TMove : class
             child.Parent = null;
             _root = child;
 
-
-            System.Diagnostics.Debug.WriteLine($"MCTS: корень успешно переведён в дочерний узел. Visits={_root.Visits}, Children={_root.Children.Count}");
-            System.Diagnostics.Debug.WriteLine($"MCTS root: Visits={_root.Visits}, Children={_root.Children.Count}, Side={_root.SideToMove}");
-
+            // System.Diagnostics.Debug.WriteLine($"MCTS: корень успешно переведён в дочерний узел. Visits={_root.Visits}, Children={_root.Children.Count}");
+            // System.Diagnostics.Debug.WriteLine($"MCTS root: Visits={_root.Visits}, Children={_root.Children.Count}, Side={_root.SideToMove}");
 
             return;
         }
         
-
-        System.Diagnostics.Debug.WriteLine($"MCTS: среди детей совпадения не найдено, дерево пересоздано. Side={sideToMove}");
-        System.Diagnostics.Debug.WriteLine($"MCTS root: Visits={_root.Visits}, Children={_root.Children.Count}, Side={_root.SideToMove}");
-        System.Diagnostics.Debug.WriteLine(
-                $"MISS: target side={sideToMove}, keyHash={key.GetHashCode()}, " +
-                $"root side={_root.SideToMove}, root children={_root.Children.Count}");
-        foreach (Node ch in _root.Children)
-        {
-            System.Diagnostics.Debug.WriteLine(
-                $"  child: side={ch.SideToMove}, keyHash={ch.PositionKey.GetHashCode()}, " +
-                $"visits={ch.Visits}, children={ch.Children.Count}, " +
-                $"move={(ch.MoveFromParent is null ? "PASS" : "MOVE")}");
-        }
-
+        // System.Diagnostics.Debug.WriteLine($"MCTS: среди детей совпадения не найдено, дерево пересоздано. Side={sideToMove}");
+        // System.Diagnostics.Debug.WriteLine($"MCTS root: Visits={_root.Visits}, Children={_root.Children.Count}, Side={_root.SideToMove}");
 
         _root = CreateRoot(position, sideToMove);
 

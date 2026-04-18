@@ -20,8 +20,8 @@ public sealed class ReversiController : IGameController
 
     public AiMode Mode { get; set; } = AiMode.AlphaBeta;
     public int AlphaBetaDepth { get; set; } = 4;
+    public int MaxDepth { get; set; } = 7;
     public int MonteCarloSimulations { get; set; } = 60;
-
     public int MctsTimeLimitMs { get; set; } = 750;
 
     public bool IsGameOver { get; private set; }
@@ -350,7 +350,7 @@ public sealed class ReversiController : IGameController
         ReversiBoard simulation = position.Copy();
         int side = sideToMove;
 
-        const double alpha = 0.15;
+        const double alpha = 0.1;
 
         while (!simulation.IsTerminal())
         {
@@ -358,7 +358,7 @@ public sealed class ReversiController : IGameController
 
             if (moves.Count > 0)
             {
-                ReversiBoard.Move choice = moves[rng.Next(moves.Count)];
+                ReversiBoard.Move choice = ChooseBiasedRolloutMove(moves, rng);
                 simulation.ApplyMove(choice.X, choice.Y, side);
             }
 
@@ -376,6 +376,50 @@ public sealed class ReversiController : IGameController
 
         return Math.Clamp(value, 0.0, 1.0);
     }
+
+    /// <summary>
+    /// Является ли ход угловым, для предпочтений в случайных доигрываниях в MCTS
+    /// </summary>
+    private static bool IsCornerMove(ReversiBoard.Move move)
+    {
+        int last = ReversiBoard.BOARD_SIZE - 1;
+
+        return
+            (move.X == 0 && move.Y == 0) ||
+            (move.X == 0 && move.Y == last) ||
+            (move.X == last && move.Y == 0) ||
+            (move.X == last && move.Y == last);
+    }
+
+    /// <summary>
+    /// Выбрать ход для случайного доигрывания партии в MCTS, с предпочтением угловых ходов если они есть
+    /// </summary>
+    private static ReversiBoard.Move ChooseBiasedRolloutMove(List<ReversiBoard.Move> moves, Random rng)
+    {
+        if (moves.Count == 1)
+            return moves[0];
+
+        List<ReversiBoard.Move>? cornerMoves = null;
+
+        foreach (ReversiBoard.Move move in moves)
+        {
+            if (!IsCornerMove(move))
+                continue;
+
+            cornerMoves ??= new List<ReversiBoard.Move>();
+            cornerMoves.Add(move);
+        }
+
+        if (cornerMoves is not null &&
+            cornerMoves.Count > 0 &&
+            rng.NextDouble() < 0.5) // с какой вероятностью выбираем угловой ход, если он доступен
+        {
+            return cornerMoves[rng.Next(cornerMoves.Count)];
+        }
+
+        return moves[rng.Next(moves.Count)];
+    }
+
 
     /// <summary>
     /// Для AlphaBeta в данной реализации нужен именно класс

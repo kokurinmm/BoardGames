@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Drawing;
 using System.Linq;
 using System.Text;
@@ -22,8 +23,8 @@ public sealed class CheckersController : IGameController
 
     public AiMode Mode { get; set; } = AiMode.AlphaBeta;
     public int AlphaBetaDepth { get; set; } = 4;
+    public int MaxDepth { get; set; } = 11;
     public int MonteCarloSimulations { get; set; } = 60;
-
     public int MctsTimeLimitMs { get; set; } = 750;
 
     public bool IsGameOver { get; private set; }

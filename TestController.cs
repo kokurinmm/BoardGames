@@ -18,6 +18,7 @@ public sealed class TestController : IGameController
 
     public AiMode Mode { get; set; } = AiMode.AlphaBeta;
     public int AlphaBetaDepth { get; set; } = 3;
+    public int MaxDepth { get; set; } = 3;
     public int MonteCarloSimulations { get; set; } = 50;
     public int MctsTimeLimitMs { get; set; } = 750;
 
