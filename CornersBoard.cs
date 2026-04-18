@@ -277,18 +277,50 @@ public sealed class CornersBoard
         List<MoveStep>? currentSequence = null,
         HashSet<Square>? visitedSquares = null)
     {
-        currentSequence ??= new List<MoveStep>();
-        visitedSquares ??= new HashSet<Square> { new Square(row, col) };
-
-        int startRow = origStartRow ?? row;
-        int startCol = origStartCol ?? col;
-
-        Dictionary<Square, MoveChain> bestByLanding = new();
-
         int piece = Grid[row, col];
         if (piece == EMPTY)
             return new List<MoveChain>();
 
+        int startRow = origStartRow ?? row;
+        int startCol = origStartCol ?? col;
+
+        List<MoveStep> path =
+        currentSequence is null
+            ? new List<MoveStep>()
+            : new List<MoveStep>(currentSequence);
+
+        HashSet<Square> visited =
+            visitedSquares is null
+                ? new HashSet<Square> { new Square(row, col) }
+                : new HashSet<Square>(visitedSquares);
+
+        Dictionary<Square, MoveChain> squareChainDict = new();
+
+        CollectJumpSequences(
+            row,
+            col,
+            player,
+            startRow,
+            startCol,
+            piece,
+            path,
+            visited,
+            squareChainDict);
+
+        return squareChainDict.Values.ToList();
+    }
+
+    private void CollectJumpSequences(
+        int row,
+        int col,
+        int player,
+        int startRow,
+        int startCol,
+        int piece,
+        List<MoveStep> path,
+        HashSet<Square> visited,
+        Dictionary<Square, MoveChain> squareChainDict)
+    { 
         foreach ((int dr, int dc) in DIRECTIONS)
         {
             int overRow = row + dr;
@@ -304,7 +336,7 @@ public sealed class CornersBoard
 
             Square landing = new Square(landRow, landCol);
 
-            if (visitedSquares.Contains(landing))
+            if (visited.Contains(landing))
                 continue;
 
             if (!IsAllowed(player, startRow, startCol, landRow, landCol))
@@ -312,35 +344,35 @@ public sealed class CornersBoard
 
             MoveStep step = new MoveStep(row, col, landRow, landCol);
 
-            List<MoveStep> nextSequence = new(currentSequence);
-            nextSequence.Add(step);
+            // применяем шаг к текущему пути, сохраняем цепочку (с учётом того, что в ней важны лишь старт и финиш),
+            // затем временно применяем шаг к доске и продолжаем рекурсивно
 
-            SaveChain(bestByLanding, new MoveChain(nextSequence));
+            path.Add(step);
+            visited.Add(landing);
+            SaveChain(squareChainDict, new MoveChain(path));
 
-            // временно применяем шаг и продолжаем рекурсивно
             Grid[row, col] = EMPTY;
             Grid[landRow, landCol] = piece;
 
-            HashSet<Square> nextVisited = new(visitedSquares) { landing };
+            CollectJumpSequences(
+                landRow,
+                landCol,
+                player,
+                startRow,
+                startCol,
+                piece,
+                path,
+                visited,
+                squareChainDict);
 
-            List<MoveChain> deeperChains =
-                JumpSequencesFrom(
-                    landRow,
-                    landCol,
-                    player,
-                    startRow,
-                    startCol,
-                    nextSequence,
-                    nextVisited);
-
-            foreach (MoveChain chain in deeperChains)
-                SaveChain(bestByLanding, chain);
-
+            // откат изменений
             Grid[landRow, landCol] = EMPTY;
             Grid[row, col] = piece;
+            visited.Remove(landing);
+            path.RemoveAt(path.Count - 1);
+
         }
 
-        return bestByLanding.Values.ToList();
     }
 
     /// <summary>
@@ -761,17 +793,17 @@ public sealed class CornersBoard
     /// </summary>
     public string GetStateKey()
     {
-        StringBuilder sb = new StringBuilder(BOARD_SIZE * BOARD_SIZE * 2 + 128);
+        StringBuilder sb = new StringBuilder(BOARD_SIZE * BOARD_SIZE + 128);
 
         for (int row = 0; row < BOARD_SIZE; row++)
             for (int col = 0; col < BOARD_SIZE; col++)
-                sb.Append(Grid[row, col]).Append(',');
+                sb.Append(CellCode(Grid[row, col]));
 
         sb.Append('|').Append(WhiteMovesPlayed)
           .Append('|').Append(BlackMovesPlayed)
           .Append('|').Append(MirrorBroken ? '1' : '0');
 
-        if (_lastWhiteMove is null)
+        if (_lastWhiteMove is null || MirrorBroken)
         {
             sb.Append('|').Append('0');
         }
@@ -790,5 +822,13 @@ public sealed class CornersBoard
 
         return sb.ToString();
     }
+
+    private static char CellCode(int piece) => piece switch
+    {
+        EMPTY => '.',
+        WHITE => 'W',
+        BLACK => 'B',
+        _ => '?'
+    };
 
 }

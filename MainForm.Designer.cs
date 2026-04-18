@@ -43,6 +43,7 @@
             pnlBoard = new Panel();
             btnNewGame = new Button();
             btnNoAiGame = new Button();
+            button1 = new Button();
             groupBox1.SuspendLayout();
             groupBox2.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)nudMctsMs).BeginInit();
@@ -204,16 +205,27 @@
             // 
             btnNoAiGame.Location = new Point(12, 479);
             btnNoAiGame.Name = "btnNoAiGame";
-            btnNoAiGame.Size = new Size(261, 34);
+            btnNoAiGame.Size = new Size(182, 34);
             btnNoAiGame.TabIndex = 5;
             btnNoAiGame.Text = "Играть без ИИ";
             btnNoAiGame.UseVisualStyleBackColor = true;
+            // 
+            // button1
+            // 
+            button1.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+            button1.Location = new Point(212, 479);
+            button1.Name = "button1";
+            button1.Size = new Size(61, 34);
+            button1.TabIndex = 6;
+            button1.Text = "?";
+            button1.UseVisualStyleBackColor = true;
             // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(10F, 25F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(821, 529);
+            Controls.Add(button1);
             Controls.Add(btnNoAiGame);
             Controls.Add(btnNewGame);
             Controls.Add(pnlBoard);
@@ -250,5 +262,6 @@
         private RadioButton rbMcts;
         private NumericUpDown nudMctsMs;
         private Label label3;
+        private Button button1;
     }
 }

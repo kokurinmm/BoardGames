@@ -18,7 +18,6 @@ public sealed class CheckersController : IGameController
     public string GameDisplayName => "Шашки";
 
     public int WhitePieceCount => _board.Count(CheckersBoard.WHITE);
-
     public int BlackPieceCount => _board.Count(CheckersBoard.BLACK);
 
     public AiMode Mode { get; set; } = AiMode.AlphaBeta;
@@ -50,6 +49,11 @@ public sealed class CheckersController : IGameController
     /// Выбранная пользователем клетка (или null)
     /// </summary>
     private (int row, int col)? _selectedPiece;
+
+    /// <summary>
+    /// Клетка, куда сходил ИИ
+    /// </summary>
+    private (int row, int col)? _lastAiSquare;
 
     /// <summary>
     /// Список возможных продолжений хода для выбранной фигуры
@@ -92,6 +96,7 @@ public sealed class CheckersController : IGameController
         _board = CheckersBoard.Initial();
 
         _selectedPiece = null;
+        _lastAiSquare = null;
         _possibleMoves.Clear();
         _mustContinueJump = false;
         GameOverMessage = null;
@@ -142,6 +147,18 @@ public sealed class CheckersController : IGameController
                 }
             }
 
+        if (_lastAiSquare is (int aiRow, int aiCol))
+        {
+            float x1 = rect.Left + aiCol * cell + 1.5f;
+            float y1 = rect.Top + aiRow * cell + 1.5f;
+            float x2 = rect.Left + (aiCol + 1) * cell - 3.5f;
+            float y2 = rect.Top + (aiRow + 1) * cell - 3.5f;
+
+            using Pen aiMovePen = new Pen(Color.OrangeRed, 3);
+            aiMovePen.Alignment = System.Drawing.Drawing2D.PenAlignment.Inset;
+            g.DrawRectangle(aiMovePen, x1, y1, x2 - x1, y2 - y1);
+        }
+
         // Если пользователь выбрал свою фигуру, выделим её и покажем возможные ходы
         if (_selectedPiece is (int selectedRow, int selectedCol))
         {
@@ -180,6 +197,8 @@ public sealed class CheckersController : IGameController
 
         if (!HumanVsHuman && _turn != _humanColor)
             return;
+
+        _lastAiSquare = null; // сразу снимаем подсветку последнего хода ИИ
 
         // Если пользователь не обязан продолжать взятие, то может выбрать другую фигуру
         if (!_mustContinueJump && CheckersBoard.IsPlayersPiece(_board.Grid[row, col], _turn))
@@ -267,6 +286,9 @@ public sealed class CheckersController : IGameController
         // если это был последний шаг, завершаем ход
         if (_pendingAiStepIndex >= _pendingAiMove.Steps.Count)
         {
+            CheckersBoard.MoveStep last = _pendingAiMove.Steps[^1];
+            _lastAiSquare = (last.R2, last.C2);
+
             _pendingAiMove = null;
             _pendingAiStepIndex = 0;
 

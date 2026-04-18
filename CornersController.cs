@@ -44,10 +44,12 @@ public sealed class CornersController : IGameController
     private int _aiColor; // цвет ИИ
     private int _turn; // игрок, которому принадлежит очередь хода
 
-    private (int row, int col)? _selectedPiece; // выбранная пользователем шашка
+    private (int row, int col)? _selectedPiece; // выбранная пользователем фишка
+
+    private (int row, int col)? _lastAiSquare; // клетка, куда сходил ИИ
 
     /// <summary>
-    /// Возможные продолжения хода для выбранной шашки
+    /// Возможные продолжения хода для выбранной фишки
     /// </summary>
     private List<CornersBoard.MoveChain> _possibleMoves = new();
 
@@ -99,6 +101,7 @@ public sealed class CornersController : IGameController
         _turn = CornersBoard.WHITE;
 
         _selectedPiece = null;
+        _lastAiSquare = null;
         _possibleMoves.Clear();
         _jumpContinuationMode = false;
         ResetExecutedTurn();
@@ -186,6 +189,18 @@ public sealed class CornersController : IGameController
                 }
             }
 
+        if (_lastAiSquare is (int aiRow, int aiCol))
+        {
+            float x1 = rect.Left + aiCol * cell + 1.5f;
+            float y1 = rect.Top + aiRow * cell + 1.5f;
+            float w = cell - 3.0f;
+            float h = cell - 3.0f;
+
+            using Pen aiMovePen = new Pen(Color.OrangeRed, 3);
+            aiMovePen.Alignment = System.Drawing.Drawing2D.PenAlignment.Inset;
+            g.DrawRectangle(aiMovePen, x1, y1, w, h);
+        }
+
         if (_selectedPiece is (int selectedRow, int selectedCol))
         {
             float x1 = rect.Left + selectedCol * cell + 1.5f;
@@ -197,7 +212,7 @@ public sealed class CornersController : IGameController
             selectionPen.Alignment = System.Drawing.Drawing2D.PenAlignment.Inset;
             g.DrawRectangle(selectionPen, x1, y1, w, h);
 
-            // Если есть варианты, отмечаем возможные ходы и саму выбранную шашку - щелчок на ней завершает серию прыжков
+            // Если есть варианты, отмечаем возможные ходы и саму выбранную фишку - щелчок на ней завершает серию прыжков
             if (_jumpContinuationMode && _possibleMoves.Count > 0)
             {
                 float cx = rect.Left + selectedCol * cell + cell / 2.0f;
@@ -235,9 +250,11 @@ public sealed class CornersController : IGameController
         if (!HumanVsHuman && _turn != _humanColor)
             return;
 
+        _lastAiSquare = null; // сразу снимаем подсветку последнего хода ИИ
+
         if (_jumpContinuationMode && _selectedPiece is (int curRow, int curCol))
         {
-            // повторный щелчок по текущей шашке завершает цепочку прыжков
+            // повторный щелчок по текущей фишке завершает цепочку прыжков
             if (row == curRow && col == curCol)
             {
                 FinishTurn();
@@ -245,7 +262,7 @@ public sealed class CornersController : IGameController
             }
         }
 
-        // вне режима продолжения прыжка можно выбрать любую свою шашку
+        // вне режима продолжения прыжка можно выбрать любую свою фишку
         if (!_jumpContinuationMode && _board.Grid[row, col] == _turn)
         {
             _selectedPiece = (row, col);
@@ -329,6 +346,10 @@ public sealed class CornersController : IGameController
 
         if (_pendingAiStepIndex >= _pendingAiMove.Steps.Count)
         {
+
+            CornersBoard.MoveStep last = _pendingAiMove.Steps[^1];
+            _lastAiSquare = (last.R2, last.C2);
+
             _pendingAiMove = null;
             _pendingAiStepIndex = 0;
             FinishTurn();

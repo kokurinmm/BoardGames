@@ -43,6 +43,8 @@ public sealed class ReversiController : IGameController
     private int _aiColor; // цвет ИИ
     private int _turn; // игрок, которому принадлежит очередь хода
 
+    private (int row, int col)? _lastAiSquare; // клетка, куда сходил ИИ
+
     private ReversiBoard.Move? _pendingAiMove; // текущий ход ИИ
     private bool _hasPendingAiMove; // выполнен ли уже найденный ход
 
@@ -77,7 +79,9 @@ public sealed class ReversiController : IGameController
 
         GameOverMessage = null;
 
-        _pendingAiMove = null; // на всякий случай - сброс анимации ИИ-хода
+        _lastAiSquare = null;
+
+        _pendingAiMove = null;
         _hasPendingAiMove = false;
 
         // Для игры с ИИ - случайный выбор цветов игроков
@@ -133,6 +137,20 @@ public sealed class ReversiController : IGameController
             using SolidBrush dot = new SolidBrush(Color.Yellow);
             g.FillEllipse(dot, cx - radius, cy - radius, 2 * radius, 2 * radius);
         }
+
+        // Подсветка последнего хода ИИ
+        if (_lastAiSquare is (int aiRow, int aiCol))
+        {
+            float x1 = rect.Left + aiCol * cell + 1.5f;
+            float y1 = rect.Top + aiRow * cell + 1.5f;
+            float w = cell - 3.0f;
+            float h = cell - 3.0f;
+
+            using Pen aiMovePen = new Pen(Color.OrangeRed, 3);
+            aiMovePen.Alignment = System.Drawing.Drawing2D.PenAlignment.Inset;
+            g.DrawRectangle(aiMovePen, x1, y1, w, h);
+        }
+
     }
 
     /// <summary>
@@ -145,6 +163,8 @@ public sealed class ReversiController : IGameController
 
         if (!HumanVsHuman && _turn != _humanColor)
             return;
+
+        _lastAiSquare = null; // сразу снимаем подсветку последнего хода ИИ
 
         var legalMoves = _board.ValidMoves(_turn);
         ReversiBoard.Move move = new ReversiBoard.Move(row, col);
@@ -186,6 +206,7 @@ public sealed class ReversiController : IGameController
         if (!_hasPendingAiMove || _pendingAiMove is null)
             return false;
 
+        _lastAiSquare = (_pendingAiMove.Value.X, _pendingAiMove.Value.Y);
         _board.ApplyMove(_pendingAiMove.Value.X, _pendingAiMove.Value.Y, _turn);
         _pendingAiMove = null;
         _hasPendingAiMove = false;

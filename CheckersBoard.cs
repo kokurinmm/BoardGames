@@ -205,62 +205,100 @@ public sealed class CheckersBoard
     /// </summary>
     public List<MoveChain> JumpSequencesFrom(int row, int col, List<MoveStep>? currentSequence = null)
     {
-        currentSequence ??= new List<MoveStep>(); // работает если currentSequence = null
-
         int piece = Grid[row, col];
         if (piece == EMPTY)
             return new List<MoveChain>();
 
+        List<MoveStep> path =
+            currentSequence is null
+                ? new List<MoveStep>()
+                : new List<MoveStep>(currentSequence);
+
+        List<MoveChain> result = new();
+
+        CollectJumpSequences(row, col, piece, path, result);
+
+        return result;
+    }
+
+    private void CollectJumpSequences(
+        int row,
+        int col,
+        int piece,
+        List<MoveStep> path,
+        List<MoveChain> result)
+    {
         int player = PieceColor(piece);
         int opponent = Opponent(player);
         bool isKing = IsKing(piece);
 
         (int dr, int dc)[] directions = { (-1, -1), (-1, 1), (1, -1), (1, 1) };
         List<MoveChain> allChains = new();
+        bool foundContinuation = false;
 
-        if (isKing) // возможные цепочки взятий для дамки
+        if (isKing) // возможные цепочки взятий для дамки - временно выполняем каждое на доске и продолжаем рекурсивно
         {
             foreach ((int dr, int dc) in directions)
             {
+                bool seenOpponent = false;
+                int capturedRow = -1;
+                int capturedCol = -1;
+
                 for (int dist = 1; dist < BOARD_SIZE; dist++)
                 {
                     int nr = row + dr * dist;
                     int nc = col + dc * dist;
+
                     if (!InBounds(nr, nc))
                         break;
 
                     int cell = Grid[nr, nc];
+
+                    if (cell == EMPTY)
+                    {
+                        if (!seenOpponent)
+                            continue;
+
+                        // приземляемся после единственной встреченной фигуры противника
+                        foundContinuation = true;
+
+                        MoveStep step = new MoveStep(row, col, nr, nc, new Square(capturedRow, capturedCol));
+
+                        int oldFrom = Grid[row, col];
+                        int oldCaptured = Grid[capturedRow, capturedCol];
+                        int oldTo = Grid[nr, nc];
+
+                        Grid[row, col] = EMPTY;
+                        Grid[capturedRow, capturedCol] = EMPTY;
+                        Grid[nr, nc] = piece;
+
+                        path.Add(step);
+                        CollectJumpSequences(nr, nc, piece, path, result);
+
+                        // откат изменений
+                        path.RemoveAt(path.Count - 1);
+                        Grid[nr, nc] = oldTo;
+                        Grid[capturedRow, capturedCol] = oldCaptured;
+                        Grid[row, col] = oldFrom;
+
+                        continue;
+                    }
 
                     if (IsPlayersPiece(cell, player))
                         break;
 
                     if (PieceColor(cell) == opponent)
                     {
-                        int jr = nr + dr;
-                        int jc = nc + dc;
+                        if (seenOpponent)
+                            break;
 
-                        if (InBounds(jr, jc) && Grid[jr, jc] == EMPTY)
-                        {
-                            CheckersBoard temp = Copy();
-                            temp.Grid[jr, jc] = piece;
-                            temp.Grid[row, col] = EMPTY;
-                            temp.Grid[nr, nc] = EMPTY;
-
-                            MoveStep step = new MoveStep(row, col, jr, jc, new Square(nr, nc));
-                            List<MoveStep> nextSequence = new(currentSequence) { step };
-
-                            List<MoveChain> sub = temp.JumpSequencesFrom(jr, jc, nextSequence);
-                            if (sub.Count > 0)
-                                allChains.AddRange(sub);
-                            else
-                                allChains.Add(new MoveChain(nextSequence));
-                        }
-
-                        break; // после первой вражеской фигуры дальше уже не идём
+                        seenOpponent = true;
+                        capturedRow = nr;
+                        capturedCol = nc;
+                        continue;
                     }
 
-                    if (cell != EMPTY)
-                        break;
+                    break;
                 }
             }
         }
@@ -276,31 +314,40 @@ public sealed class CheckersBoard
                 if (!InBounds(nr, nc) || !InBounds(jr, jc))
                     continue;
 
-                if (PieceColor(Grid[nr, nc]) == opponent && Grid[jr, jc] == EMPTY)
-                {
-                    CheckersBoard temp = Copy();
-                    int finalPiece = piece;
+                if (PieceColor(Grid[nr, nc]) != opponent || Grid[jr, jc] != EMPTY)
+                    continue;
 
-                    if ((player == WHITE && jr == 0) || (player == BLACK && jr == BOARD_SIZE - 1))
-                        finalPiece = MakeKing(finalPiece); // превращение в дамку с возможным продолжением цепочки взятий
+                foundContinuation = true;
 
-                    temp.Grid[jr, jc] = finalPiece;
-                    temp.Grid[row, col] = EMPTY;
-                    temp.Grid[nr, nc] = EMPTY;
+                int nextPiece = piece;
+                if ((player == WHITE && jr == 0) || (player == BLACK && jr == BOARD_SIZE - 1))
+                    nextPiece = MakeKing(piece);
 
-                    MoveStep step = new MoveStep(row, col, jr, jc, new Square(nr, nc));
-                    List<MoveStep> nextSequence = new(currentSequence) { step };
+                MoveStep step = new MoveStep(row, col, jr, jc, new Square(nr, nc));
 
-                    List<MoveChain> sub = temp.JumpSequencesFrom(jr, jc, nextSequence);
-                    if (sub.Count > 0)
-                        allChains.AddRange(sub);
-                    else
-                        allChains.Add(new MoveChain(nextSequence));
-                }
+                int oldFrom = Grid[row, col];
+                int oldCaptured = Grid[nr, nc];
+                int oldTo = Grid[jr, jc];
+
+                Grid[row, col] = EMPTY;
+                Grid[nr, nc] = EMPTY;
+                Grid[jr, jc] = nextPiece;
+
+                path.Add(step);
+                CollectJumpSequences(jr, jc, nextPiece, path, result);
+
+                // откат изменений
+                path.RemoveAt(path.Count - 1);
+                Grid[jr, jc] = oldTo;
+                Grid[nr, nc] = oldCaptured;
+                Grid[row, col] = oldFrom;
             }
         }
 
-        return allChains;
+        // если продолжений нет, то текущий path - законченная цепочка взятий
+        if (!foundContinuation && path.Count > 0)
+            result.Add(new MoveChain(path));
+
     }
 
     /// <summary>
@@ -446,16 +493,26 @@ public sealed class CheckersBoard
     /// </summary>
     public string GetStateKey()
     {
-        StringBuilder sb = new StringBuilder(BOARD_SIZE * BOARD_SIZE * 2 + 4);
+        StringBuilder sb = new StringBuilder(BOARD_SIZE * BOARD_SIZE + 4);
 
         for (int row = 0; row < BOARD_SIZE; row++)
             for (int col = 0; col < BOARD_SIZE; col++)
-                sb.Append(Grid[row, col]).Append(',');
+                sb.Append(CellCode(Grid[row, col]));
 
         sb.Append('|').Append(QuietMoves);
 
         return sb.ToString();
     }
+
+    private static char CellCode(int piece) => piece switch
+    {
+        EMPTY => '.',
+        W_MAN => 'w',
+        W_KING => 'W',
+        B_MAN => 'b',
+        B_KING => 'B',
+        _ => '?'
+    };
 
     /// <summary>
     /// Обновить счётчик тихих ходов, movingPiece - тип фишки до начала хода

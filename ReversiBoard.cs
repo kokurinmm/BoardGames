@@ -223,13 +223,22 @@ public sealed class ReversiBoard
     /// </summary>
     public string GetStateKey()
     {
-        StringBuilder sb = new StringBuilder(BOARD_SIZE * BOARD_SIZE * 2);
+        char[] key = new char[BOARD_SIZE * BOARD_SIZE];
+        int k = 0;
 
         for (int row = 0; row < BOARD_SIZE; row++)
             for (int col = 0; col < BOARD_SIZE; col++)
-                sb.Append(Grid[row, col]).Append(',');
+                key[k++] = CellCode(Grid[row, col]);
 
-        return sb.ToString();
+        return new string(key);
     }
+
+    private static char CellCode(int piece) => piece switch
+    {
+        EMPTY => '.',
+        BLACK => 'X',
+        WHITE => 'O',
+        _ => '?'
+    };
 
 }
