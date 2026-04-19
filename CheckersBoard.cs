@@ -203,17 +203,13 @@ public sealed class CheckersBoard
     /// Все цепочки взятий для фигуры на клетке (row, col)
     /// currentSequence хранит уже пройденную часть цепочки.
     /// </summary>
-    public List<MoveChain> JumpSequencesFrom(int row, int col, List<MoveStep>? currentSequence = null)
+    public List<MoveChain> JumpSequencesFrom(int row, int col)
     {
         int piece = Grid[row, col];
         if (piece == EMPTY)
             return new List<MoveChain>();
 
-        List<MoveStep> path =
-            currentSequence is null
-                ? new List<MoveStep>()
-                : new List<MoveStep>(currentSequence);
-
+        List<MoveStep> path = new List<MoveStep>();
         List<MoveChain> result = new();
 
         CollectJumpSequences(row, col, piece, path, result);
@@ -233,7 +229,6 @@ public sealed class CheckersBoard
         bool isKing = IsKing(piece);
 
         (int dr, int dc)[] directions = { (-1, -1), (-1, 1), (1, -1), (1, 1) };
-        List<MoveChain> allChains = new();
         bool foundContinuation = false;
 
         if (isKing) // возможные цепочки взятий для дамки - временно выполняем каждое на доске и продолжаем рекурсивно

@@ -278,7 +278,7 @@ public sealed class CornersBoard
         HashSet<Square>? visitedSquares = null)
     {
         int piece = Grid[row, col];
-        if (piece == EMPTY)
+        if (piece != player)
             return new List<MoveChain>();
 
         int startRow = origStartRow ?? row;
