@@ -141,6 +141,36 @@ public sealed class ReversiBoard
     }
 
     /// <summary>
+    /// Доступен ли данный ход игроку player, для быстрой функции HasAnyMoves
+    /// </summary>
+    private bool IsLegalMove(int row, int col, int player)
+    {
+        if (Grid[row, col] != EMPTY)
+            return false;
+
+        int opponent = Opponent(player);
+
+        foreach ((int dx, int dy) in DIRECTIONS)
+        {
+            int nr = row + dx;
+            int nc = col + dy;
+            bool seenOpponent = false;
+
+            while (InBounds(nr, nc) && Grid[nr, nc] == opponent)
+            {
+                seenOpponent = true;
+                nr += dx;
+                nc += dy;
+            }
+
+            if (seenOpponent && InBounds(nr, nc) && Grid[nr, nc] == player)
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Применить ход игрока player в клетку (row, col)
     /// </summary>
     public void ApplyMove(int row, int col, int player)
@@ -152,8 +182,16 @@ public sealed class ReversiBoard
             Grid[fx, fy] = player;
     }
 
-    // Есть ли у игрока доступные ходы
-    public bool HasAnyMoves(int player) => ValidMoves(player).Count > 0;
+    // Есть ли у игрока доступные ходы (быстрая проверка без построения словаря ValidMoves)
+    public bool HasAnyMoves(int player)
+    {
+        for (int row = 0; row < BOARD_SIZE; row++)
+            for (int col = 0; col < BOARD_SIZE; col++)
+                if (IsLegalMove(row, col, player))
+                    return true;
+        return false;
+
+    }
 
     // Проверка окончания игры (когда ни у одного из игроков нет доступных ходов)
     public bool IsTerminal() => !HasAnyMoves(BLACK) && !HasAnyMoves(WHITE);

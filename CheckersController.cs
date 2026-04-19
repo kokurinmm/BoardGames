@@ -147,6 +147,7 @@ public sealed class CheckersController : IGameController
                 }
             }
 
+        // Подсветка последнего хода ИИ
         if (_lastAiSquare is (int aiRow, int aiCol))
         {
             float x1 = rect.Left + aiCol * cell + 1.5f;

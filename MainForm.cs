@@ -239,10 +239,15 @@ public partial class MainForm : Form
                 if (!changed)
                     break;
 
+                bool firstAiStep = true;
+
                 // Если у подготовленного хода есть визуальные шаги, применяем их по одному с задержками
                 while (_controller.HasPendingAiAnimation && !_controller.IsGameOver)
                 {
-                    await Task.Delay(400);
+                    if (firstAiStep)
+                        await Task.Delay(100); // если это первый шаг в цепочке ходов ИИ, сделаем задержку поменьше
+                    else
+                        await Task.Delay(400);
 
                     bool stepChanged = _controller.ApplyNextAiAnimationStep();
 
@@ -251,11 +256,13 @@ public partial class MainForm : Form
 
                     if (!stepChanged)
                         break;
+
+                    firstAiStep = false;
                 }
 
                 // Если после этого ИИ должен ходить ещё раз подряд, сделать паузу между полными ходами
                 if (_controller.IsAiTurn && !_controller.IsGameOver)
-                    await Task.Delay(400);
+                    await Task.Delay(250);
             }
             if (_controller.IsGameOver)
             {
@@ -296,7 +303,8 @@ public partial class MainForm : Form
                 "Алгоритм Monte Carlo Tree Search\nна протяжении всей партии " +
                 "строит дерево ходов с их оценками, запускает случайные доигрывания партий из разных позиций " +
                 "и глубоко исследует перспективные ветви. В шашках доигрывания полностью случайные,\n" +
-                "в реверси и уголках - не совсем.\n\nПереключение алгоритма ИИ перезапускает игру.\n\n" +
+                "в реверси и уголках - не совсем.\n\nЗа какой цвет вы играете - определяется случайно.\nПереключение алгоритма ИИ перезапускает игру.\n" +
+                "Но изменить уровень сложности можно и на ходу в процессе игры.\n\n" +
                 "А если вы хотите поиграть сами с собой - нажмите кнопку \"Играть без ИИ\".\n\nВот и всё, интересных вам игр!",
                 "Справка",
                 MessageBoxButtons.OK,

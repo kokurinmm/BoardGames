@@ -143,8 +143,8 @@ public sealed class ReversiController : IGameController
         {
             float x1 = rect.Left + aiCol * cell + 1.5f;
             float y1 = rect.Top + aiRow * cell + 1.5f;
-            float w = cell - 3.0f;
-            float h = cell - 3.0f;
+            float w = cell - 3.5f;
+            float h = cell - 3.5f;
 
             using Pen aiMovePen = new Pen(Color.OrangeRed, 3);
             aiMovePen.Alignment = System.Drawing.Drawing2D.PenAlignment.Inset;
@@ -370,18 +370,26 @@ public sealed class ReversiController : IGameController
     {
         ReversiBoard simulation = position.Copy();
         int side = sideToMove;
+        int passes = 0;
 
         const double alpha = 0.1;
 
-        while (!simulation.IsTerminal())
+        while (passes < 2) // два паса подряд - конец игры. Работает быстрее чем IsTerminal
         {
-            List<ReversiBoard.Move> moves = simulation.ValidMoves(side).Keys.ToList();
+            Dictionary<ReversiBoard.Move, List<(int x, int y)>> legal = simulation.ValidMoves(side);
 
-            if (moves.Count > 0)
+            if (legal.Count == 0)
             {
-                ReversiBoard.Move choice = ChooseBiasedRolloutMove(moves, rng);
-                simulation.ApplyMove(choice.X, choice.Y, side);
+                passes++;
+                side = ReversiBoard.Opponent(side);
+                continue;
             }
+
+            passes = 0;
+
+            List<ReversiBoard.Move> moves = legal.Keys.ToList();
+            ReversiBoard.Move choice = ChooseBiasedRolloutMove(moves, rng);
+            simulation.ApplyMove(choice.X, choice.Y, side);
 
             // Если ходов нет, право хода всё равно переходит сопернику
             side = ReversiBoard.Opponent(side);

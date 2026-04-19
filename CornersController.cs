@@ -193,8 +193,8 @@ public sealed class CornersController : IGameController
         {
             float x1 = rect.Left + aiCol * cell + 1.5f;
             float y1 = rect.Top + aiRow * cell + 1.5f;
-            float w = cell - 3.0f;
-            float h = cell - 3.0f;
+            float w = cell - 3.5f;
+            float h = cell - 3.5f;
 
             using Pen aiMovePen = new Pen(Color.OrangeRed, 3);
             aiMovePen.Alignment = System.Drawing.Drawing2D.PenAlignment.Inset;
