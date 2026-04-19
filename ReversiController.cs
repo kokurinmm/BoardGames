@@ -43,7 +43,7 @@ public sealed class ReversiController : IGameController
     private int _aiColor; // цвет ИИ
     private int _turn; // игрок, которому принадлежит очередь хода
 
-    private (int row, int col)? _lastAiSquare; // клетка, куда сходил ИИ
+    private (int row, int col)? _lastAiSquare; // клетка, куда сходил ИИ (или пользователь в режиме HumanVsHuman)
 
     private ReversiBoard.Move? _pendingAiMove; // текущий ход ИИ
     private bool _hasPendingAiMove; // выполнен ли уже найденный ход
@@ -146,7 +146,7 @@ public sealed class ReversiController : IGameController
             float w = cell - 3.5f;
             float h = cell - 3.5f;
 
-            using Pen aiMovePen = new Pen(Color.OrangeRed, 3);
+            using Pen aiMovePen = new Pen(Color.Crimson, 3);
             aiMovePen.Alignment = System.Drawing.Drawing2D.PenAlignment.Inset;
             g.DrawRectangle(aiMovePen, x1, y1, w, h);
         }
@@ -172,6 +172,9 @@ public sealed class ReversiController : IGameController
             return;
 
         _board.ApplyMove(row, col, _turn);
+
+        if (HumanVsHuman)
+            _lastAiSquare = (row, col); // в режиме без ИИ обводим такой же рамкой, как у ИИ
 
         ResolveTurn();
     }

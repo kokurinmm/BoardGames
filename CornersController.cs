@@ -196,7 +196,7 @@ public sealed class CornersController : IGameController
             float w = cell - 3.5f;
             float h = cell - 3.5f;
 
-            using Pen aiMovePen = new Pen(Color.OrangeRed, 3);
+            using Pen aiMovePen = new Pen(Color.MediumVioletRed, 3);
             aiMovePen.Alignment = System.Drawing.Drawing2D.PenAlignment.Inset;
             g.DrawRectangle(aiMovePen, x1, y1, w, h);
         }
@@ -573,6 +573,12 @@ public sealed class CornersController : IGameController
     {
         if (_executedTurn is null)
             return;
+
+        if (HumanVsHuman)
+        {
+            CornersBoard.MoveStep last = _executedTurn.Steps[^1];
+            _lastAiSquare = (last.R2, last.C2); // в режиме без ИИ обводим такой же рамкой, как у ИИ
+        }
 
         _board.UpdateAfterFullMove(_executedTurn, _turn);
         ResetSelection();

@@ -51,7 +51,7 @@ public sealed class CheckersController : IGameController
     private (int row, int col)? _selectedPiece;
 
     /// <summary>
-    /// Клетка, куда сходил ИИ
+    /// Клетка, куда сходил ИИ (или пользователь в HumanVsHuman)
     /// </summary>
     private (int row, int col)? _lastAiSquare;
 
@@ -155,7 +155,7 @@ public sealed class CheckersController : IGameController
             float x2 = rect.Left + (aiCol + 1) * cell - 3.5f;
             float y2 = rect.Top + (aiRow + 1) * cell - 3.5f;
 
-            using Pen aiMovePen = new Pen(Color.OrangeRed, 3);
+            using Pen aiMovePen = new Pen(Color.Firebrick, 3);
             aiMovePen.Alignment = System.Drawing.Drawing2D.PenAlignment.Inset;
             g.DrawRectangle(aiMovePen, x1, y1, x2 - x1, y2 - y1);
         }
@@ -247,6 +247,9 @@ public sealed class CheckersController : IGameController
         _selectedPiece = null;
         _possibleMoves.Clear();
         _mustContinueJump = false;
+
+        if (HumanVsHuman)
+            _lastAiSquare = (step.R2, step.C2); // в режиме без ИИ обводим такой же рамкой, как у ИИ
 
         _turn = CheckersBoard.Opponent(_turn);
         CheckGameOver();
