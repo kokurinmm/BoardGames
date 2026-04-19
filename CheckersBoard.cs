@@ -276,7 +276,7 @@ public sealed class CheckersBoard
                         Grid[capturedRow, capturedCol] = oldCaptured;
                         Grid[row, col] = oldFrom;
 
-                        continue;
+                        break;
                     }
 
                     if (IsPlayersPiece(cell, player))

@@ -116,7 +116,7 @@
             nudMctsMs.Increment = new decimal(new int[] { 200, 0, 0, 0 });
             nudMctsMs.Location = new Point(150, 155);
             nudMctsMs.Maximum = new decimal(new int[] { 10000, 0, 0, 0 });
-            nudMctsMs.Minimum = new decimal(new int[] { 200, 0, 0, 0 });
+            nudMctsMs.Minimum = new decimal(new int[] { 250, 0, 0, 0 });
             nudMctsMs.Name = "nudMctsMs";
             nudMctsMs.ReadOnly = true;
             nudMctsMs.Size = new Size(74, 31);
