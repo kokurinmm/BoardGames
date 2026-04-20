@@ -57,9 +57,12 @@ public sealed class BoardView : Control
 
     public Rectangle GetBoardRect() // вычисление квадратной области доски
     {
-        int size = Math.Min(ClientSize.Width, ClientSize.Height);
+        int cell = Math.Min(ClientSize.Width, ClientSize.Height) / BoardSize;
+        int size = cell * BoardSize;
+
         int left = (ClientSize.Width - size) / 2;
         int top = (ClientSize.Height - size) / 2;
+
         return new Rectangle(left, top, size, size);
     }
 }

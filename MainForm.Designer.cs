@@ -187,9 +187,9 @@
             // 
             // pnlBoard
             // 
-            pnlBoard.Location = new Point(300, 0);
+            pnlBoard.Location = new Point(301, 1);
             pnlBoard.Name = "pnlBoard";
-            pnlBoard.Size = new Size(520, 528);
+            pnlBoard.Size = new Size(520, 520);
             pnlBoard.TabIndex = 3;
             // 
             // btnNewGame
@@ -203,7 +203,7 @@
             // 
             // btnNoAiGame
             // 
-            btnNoAiGame.Location = new Point(12, 479);
+            btnNoAiGame.Location = new Point(12, 475);
             btnNoAiGame.Name = "btnNoAiGame";
             btnNoAiGame.Size = new Size(182, 34);
             btnNoAiGame.TabIndex = 5;
@@ -213,7 +213,7 @@
             // btnHelp
             // 
             btnHelp.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
-            btnHelp.Location = new Point(212, 479);
+            btnHelp.Location = new Point(212, 475);
             btnHelp.Name = "btnHelp";
             btnHelp.Size = new Size(61, 34);
             btnHelp.TabIndex = 6;
@@ -225,7 +225,7 @@
             // 
             AutoScaleDimensions = new SizeF(10F, 25F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(821, 529);
+            ClientSize = new Size(822, 522);
             Controls.Add(btnHelp);
             Controls.Add(btnNoAiGame);
             Controls.Add(btnNewGame);
@@ -236,7 +236,7 @@
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
             Name = "MainForm";
-            Text = "Шашки и Реверси";
+            Text = "Board Games";
             groupBox1.ResumeLayout(false);
             groupBox1.PerformLayout();
             groupBox2.ResumeLayout(false);
