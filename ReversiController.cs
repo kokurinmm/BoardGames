@@ -20,7 +20,7 @@ public sealed class ReversiController : IGameController
 
     public AiMode Mode { get; set; } = AiMode.AlphaBeta;
     public int AlphaBetaDepth { get; set; } = 4;
-    public int MaxDepth { get; set; } = 7;
+    public int MaxDepth { get; set; } = 9;
     public int MonteCarloSimulations { get; set; } = 60;
     public int MctsTimeLimitMs { get; set; } = 750;
 
@@ -55,7 +55,8 @@ public sealed class ReversiController : IGameController
     public ReversiController()
     {
         _mcts = new MctsSession<ReversiBoard, MoveRef>(
-            legalMoves: (pos, side) => pos.ValidMoves(side).Keys.Select(m => new MoveRef(m.X, m.Y)).ToList(),
+            // Здесь преобразование ходов в тип MoveRef
+            legalMoves: (pos, side) => pos.LegalMoves(side).Select(m => new MoveRef(m.X, m.Y)).ToList(),
             applyMoveToCopy: (pos, move, side) =>
             {
                 ReversiBoard child = pos.Copy();
@@ -127,8 +128,8 @@ public sealed class ReversiController : IGameController
             }
 
         // Подсветка допустимых ходов текущего игрока
-        var legalMoves = _board.ValidMoves(_turn);
-        foreach (ReversiBoard.Move move in legalMoves.Keys)
+        var legalMoves = _board.LegalMoves(_turn);
+        foreach (ReversiBoard.Move move in legalMoves)
         {
             float cx = rect.Left + move.Y * cell + cell / 2.0f;
             float cy = rect.Top + move.X * cell + cell / 2.0f;
@@ -166,9 +167,8 @@ public sealed class ReversiController : IGameController
 
         _lastAiSquare = null; // сразу снимаем подсветку последнего хода ИИ
 
-        var legalMoves = _board.ValidMoves(_turn);
         ReversiBoard.Move move = new ReversiBoard.Move(row, col);
-        if (!legalMoves.ContainsKey(move))
+        if (!_board.IsLegalMove(row, col, _turn))
             return;
 
         _board.ApplyMove(row, col, _turn);
@@ -184,11 +184,9 @@ public sealed class ReversiController : IGameController
         if (IsGameOver || _turn != _aiColor)
             return false;
 
-        var legalMoves = _board.ValidMoves(_turn);
+        ReversiBoard.Move? bestMove = FindBestAiMove(); // вызываем даже если ходов нет и это пас - для MCTS
 
-        ReversiBoard.Move? bestMove = FindBestAiMove(legalMoves); // вызываем даже если ходов нет и это пас - для MCTS
-
-        if (legalMoves.Count == 0)
+        if (!_board.HasAnyMoves(_turn))
         {
             ResolveTurn();
             return true;
@@ -222,13 +220,10 @@ public sealed class ReversiController : IGameController
     /// <summary>
     /// Найти лучший ход ИИ
     /// </summary>
-    private ReversiBoard.Move? FindBestAiMove(
-        Dictionary<ReversiBoard.Move, List<(int x, int y)>>? legalMoves = null)
+    private ReversiBoard.Move? FindBestAiMove()
     {
-        legalMoves ??= _board.ValidMoves(_turn);
-
-        if (legalMoves.Count == 0 && Mode != AiMode.Mcts)
-            return null;
+        if (Mode != AiMode.Mcts && !_board.HasAnyMoves(_aiColor))
+            return null; // даже если ходов нет, алгоритм MCTS должен обработать пас и перепривязать корень дерева 
 
         ReversiBoard.Move? bestMove = null;
 
@@ -236,7 +231,9 @@ public sealed class ReversiController : IGameController
         {
             (double score, MoveRef? moveRef) = AlphaBeta.Search(
                 position: _board,
-                legalMoves: (pos, side) => pos.ValidMoves(side).Keys.Select(m => new MoveRef(m.X, m.Y)).ToList(),
+                legalMoves: (pos, side) => pos.LegalMoves(side) // преобразование ходов в тип MoveRef
+                    .Select(m => new MoveRef(m.X, m.Y))
+                    .ToList(),
                 applyMoveToCopy: (pos, move, side) =>
                 {
                     ReversiBoard child = pos.Copy();
@@ -260,7 +257,9 @@ public sealed class ReversiController : IGameController
         {
             MoveRef? bestMoveRef = MonteCarlo.BestMove(
                 position: _board,
-                legalMoves: (pos, side) => pos.ValidMoves(side).Keys.Select(m => new MoveRef(m.X, m.Y)).ToList(),
+                legalMoves: (pos, side) => pos.LegalMoves(side)
+                    .Select(m => new MoveRef(m.X, m.Y))
+                    .ToList(),
                 applyMoveToCopy: (pos, move) =>
                 {
                     ReversiBoard child = pos.Copy();
@@ -293,11 +292,9 @@ public sealed class ReversiController : IGameController
         if (_turn != _aiColor)
             return false;
 
-        var legalMoves = _board.ValidMoves(_turn);
+        ReversiBoard.Move? bestMove = FindBestAiMove(); // вызываем даже если ходов нет и это пас - для MCTS
 
-        ReversiBoard.Move? bestMove = FindBestAiMove(legalMoves); // вызываем даже если ходов нет и это пас - для MCTS
-
-        if (legalMoves.Count == 0)
+        if (!_board.HasAnyMoves(_turn))
         {
             ResolveTurn();
             return true;
@@ -379,9 +376,9 @@ public sealed class ReversiController : IGameController
 
         while (passes < 2) // два паса подряд - конец игры. Работает быстрее чем IsTerminal
         {
-            Dictionary<ReversiBoard.Move, List<(int x, int y)>> legal = simulation.ValidMoves(side);
+            List<ReversiBoard.Move> moves = simulation.LegalMoves(side);
 
-            if (legal.Count == 0)
+            if (moves.Count == 0)
             {
                 passes++;
                 side = ReversiBoard.Opponent(side);
@@ -390,7 +387,6 @@ public sealed class ReversiController : IGameController
 
             passes = 0;
 
-            List<ReversiBoard.Move> moves = legal.Keys.ToList();
             ReversiBoard.Move choice = ChooseBiasedRolloutMove(moves, rng);
             simulation.ApplyMove(choice.X, choice.Y, side);
 

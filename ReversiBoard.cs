@@ -88,24 +88,48 @@ public sealed class ReversiBoard
     public readonly record struct Move(int X, int Y);
 
     /// <summary>
-    /// Найти допустимые ходы данного игрока и какие фишки перевернутся при этих ходах
+    /// Список доступных ходов данного игрока
     /// </summary>
-    public Dictionary<Move, List<(int x, int y)>> ValidMoves(int player)
+    public List<Move> LegalMoves(int player)
     {
-        Dictionary<Move, List<(int x, int y)>> moves = new();
+        List<Move> moves = new();
 
         for (int row = 0; row < BOARD_SIZE; row++)
             for (int col = 0; col < BOARD_SIZE; col++)
-            {
-                if (Grid[row, col] != EMPTY)
-                    continue;
-
-                List<(int x, int y)> flips = FlipsForMove(row, col, player);
-                if (flips.Count > 0)
-                    moves[new Move(row, col)] = flips;
-            }
+                if (IsLegalMove(row, col, player))
+                    moves.Add(new Move(row, col));
 
         return moves;
+    }
+
+    /// <summary>
+    /// Доступен ли данный ход игроку player
+    /// </summary>
+    public bool IsLegalMove(int row, int col, int player)
+    {
+        if (Grid[row, col] != EMPTY)
+            return false;
+
+        int opponent = Opponent(player);
+
+        foreach ((int dx, int dy) in DIRECTIONS)
+        {
+            int nr = row + dx;
+            int nc = col + dy;
+            bool seenOpponent = false;
+
+            while (InBounds(nr, nc) && Grid[nr, nc] == opponent)
+            {
+                seenOpponent = true;
+                nr += dx;
+                nc += dy;
+            }
+
+            if (seenOpponent && InBounds(nr, nc) && Grid[nr, nc] == player)
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -141,36 +165,6 @@ public sealed class ReversiBoard
     }
 
     /// <summary>
-    /// Доступен ли данный ход игроку player, для быстрой функции HasAnyMoves
-    /// </summary>
-    private bool IsLegalMove(int row, int col, int player)
-    {
-        if (Grid[row, col] != EMPTY)
-            return false;
-
-        int opponent = Opponent(player);
-
-        foreach ((int dx, int dy) in DIRECTIONS)
-        {
-            int nr = row + dx;
-            int nc = col + dy;
-            bool seenOpponent = false;
-
-            while (InBounds(nr, nc) && Grid[nr, nc] == opponent)
-            {
-                seenOpponent = true;
-                nr += dx;
-                nc += dy;
-            }
-
-            if (seenOpponent && InBounds(nr, nc) && Grid[nr, nc] == player)
-                return true;
-        }
-
-        return false;
-    }
-
-    /// <summary>
     /// Применить ход игрока player в клетку (row, col)
     /// </summary>
     public void ApplyMove(int row, int col, int player)
@@ -182,7 +176,7 @@ public sealed class ReversiBoard
             Grid[fx, fy] = player;
     }
 
-    // Есть ли у игрока доступные ходы (быстрая проверка без построения словаря ValidMoves)
+    // Есть ли у игрока доступные ходы
     public bool HasAnyMoves(int player)
     {
         for (int row = 0; row < BOARD_SIZE; row++)
@@ -246,7 +240,7 @@ public sealed class ReversiBoard
                     positionalScore -= POSITIONAL_MATRIX[row, col];
             }
 
-        double mobilityScore = ValidMoves(player).Count - ValidMoves(opponent).Count;
+        double mobilityScore = LegalMoves(player).Count - LegalMoves(opponent).Count;
 
         double total =
             W_POS[phase] * positionalScore +
