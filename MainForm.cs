@@ -247,7 +247,7 @@ public partial class MainForm : Form
                     if (firstAiStep)
                         await Task.Delay(100); // если это первый шаг в цепочке ходов ИИ, сделаем задержку поменьше
                     else
-                        await Task.Delay(400);
+                        await Task.Delay(500);
 
                     bool stepChanged = _controller.ApplyNextAiAnimationStep();
 
@@ -262,7 +262,7 @@ public partial class MainForm : Form
 
                 // Если после этого ИИ должен ходить ещё раз подряд, сделать паузу между полными ходами
                 if (_controller.IsAiTurn && !_controller.IsGameOver)
-                    await Task.Delay(250);
+                    await Task.Delay(350);
             }
             if (_controller.IsGameOver)
             {

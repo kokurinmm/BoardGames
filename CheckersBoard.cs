@@ -430,42 +430,8 @@ public sealed class CheckersBoard
                 }
             }
         }
-
-        // Оценка мобильности
-        int CountUniqueFirstSteps(List<MoveChain> chains)
-        {
-            HashSet<(int r1, int c1, int r2, int c2)> uniqueSteps = new();
-
-            foreach (MoveChain chain in chains)
-            {
-                if (chain.Steps.Count == 0)
-                    continue;
-
-                MoveStep first = chain.Steps[0];
-                uniqueSteps.Add((first.R1, first.C1, first.R2, first.C2));
-            }
-
-            return uniqueSteps.Count;
-        }
-
-        int myMobility;
-        int oppMobility;
-
-        if (rootPlayer == sideToMove)
-            myMobility = CountUniqueFirstSteps(moves);
-        else
-            myMobility = CountUniqueFirstSteps(AllMoves(rootPlayer));
-
-        if (opponent == sideToMove)
-            oppMobility = CountUniqueFirstSteps(moves);
-        else
-            oppMobility = CountUniqueFirstSteps(AllMoves(opponent));
-
-        double mobilityScore = myMobility - oppMobility;
-
         return materialScore
-             + advancementScore
-             + 0.03 * mobilityScore;
+             + advancementScore;
     }
 
     /// <summary>

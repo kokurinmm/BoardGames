@@ -26,14 +26,32 @@ public static class AlphaBeta
         int depth, // глубина поиска
         double alpha,
         double beta,
-        bool maximizingPlayer) // если True, то текущий ход принадлежит root_player
+        bool maximizingPlayer, // если True, то текущий ход принадлежит root_player
+        Func<TPos, int, List<TMove>, List<TMove>?>? forcingMoves = null) // вынужденные ходы (проверяются до конца) или null
         where TMove : class
     {
         int sideToMove = maximizingPlayer ? rootPlayer : opponent(rootPlayer);
         List<TMove> moves = legalMoves(position, sideToMove);
 
-        if (depth == 0 || isTerminal(position, sideToMove) || (!canPass && moves.Count == 0))
-            return (evaluate(position, rootPlayer, sideToMove, moves), null);
+        if (isTerminal(position, sideToMove) || (!canPass && moves.Count == 0))
+        {
+            double score = evaluate(position, rootPlayer, sideToMove, moves);
+            if (score > 0)
+                score += depth; // если выигрыш, то лучше поскорее
+            else if (score<0)
+                score -= depth; // если поражение, то лучше не сразу
+            return (score, null);
+        }
+
+        if (depth == 0)
+        {
+            List<TMove>? forcings = forcingMoves?.Invoke(position, sideToMove, moves);
+
+            if (forcings is null || forcings.Count == 0) // если нет вынужденных ходов (взятий), обязательных для проверки
+                return (evaluate(position, rootPlayer, sideToMove, moves), null); // то оцениваем позицию
+
+            moves = forcings; // если же вынужденные ходы есть, продолжаем углубляться, пока они не закончатся
+        }
 
         if (moves.Count == 0 && canPass)
         {
@@ -46,10 +64,11 @@ public static class AlphaBeta
                 isTerminal,
                 canPass,
                 rootPlayer,
-                depth - 1,
+                depth > 0 ? depth - 1 : 0, // depth=0 при просчёте вынужденных ходов, оставляем 0, иначе уменьшаем на 1
                 alpha,
                 beta,
-                !maximizingPlayer);
+                !maximizingPlayer,
+                forcingMoves);
 
             return (scoreAfterPass, null);
         }
@@ -73,10 +92,11 @@ public static class AlphaBeta
                     isTerminal,
                     canPass,
                     rootPlayer,
-                    depth - 1,
+                    depth > 0 ? depth - 1 : 0,
                     alpha,
                     beta,
-                    false);
+                    false,
+                    forcingMoves);
 
                 if (bestMove is null || childValue > bestValue)
                 {
@@ -108,10 +128,11 @@ public static class AlphaBeta
                     isTerminal,
                     canPass,
                     rootPlayer,
-                    depth - 1,
+                    depth > 0 ? depth - 1 : 0,
                     alpha,
                     beta,
-                    true);
+                    true,
+                    forcingMoves);
 
                 if (bestMove is null || childValue < bestValue)
                 {

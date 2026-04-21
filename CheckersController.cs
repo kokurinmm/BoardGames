@@ -22,7 +22,7 @@ public sealed class CheckersController : IGameController
 
     public AiMode Mode { get; set; } = AiMode.AlphaBeta;
     public int AlphaBetaDepth { get; set; } = 4;
-    public int MaxDepth { get; set; } = 11;
+    public int MaxDepth { get; set; } = 12;
     public int MonteCarloSimulations { get; set; } = 60;
     public int MctsTimeLimitMs { get; set; } = 750;
 
@@ -82,7 +82,7 @@ public sealed class CheckersController : IGameController
             },
             rolloutScore: CheckersMctsRolloutResult,
             opponent: CheckersBoard.Opponent,
-            isTerminal: (pos, side) => pos.QuietMoves >= CheckersBoard.DRAW_NUM,
+            isTerminal: (pos, side) => pos.QuietMoves >= CheckersBoard.DRAW_NUM, // отсутствие ходов проверяется отдельно
             positionKey: pos => pos.GetStateKey(),
             canPass: false,
             explorationConstant: Math.Sqrt(2.0));
@@ -346,13 +346,21 @@ public sealed class CheckersController : IGameController
                 },
                 evaluate: (pos, root, side, generatedMoves) => pos.Evaluate(root, side, generatedMoves),
                 opponent: CheckersBoard.Opponent,
-                isTerminal: (pos, side) => pos.QuietMoves >= CheckersBoard.DRAW_NUM,
+                isTerminal: (pos, side) => pos.QuietMoves >= CheckersBoard.DRAW_NUM, // отсутствие ходов проверяется отдельно
                 canPass: false,
                 rootPlayer: _aiColor,
                 depth: AlphaBetaDepth,
                 alpha: double.NegativeInfinity,
                 beta: double.PositiveInfinity,
-                maximizingPlayer: true);
+                maximizingPlayer: true,
+                forcingMoves: (pos, side, moves) => // вынужденные взятия просчитывать до конца, на всю глубину
+                {
+                    if (moves.Count == 0)
+                        return null;
+
+                    CheckersBoard.MoveStep first = moves[0].Steps[0];
+                    return first.Captured.HasValue ? moves : null;
+                });
         }
         else if (Mode == AiMode.MonteCarlo)
         {
