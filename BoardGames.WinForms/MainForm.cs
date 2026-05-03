@@ -140,7 +140,7 @@ public partial class MainForm : Form
         _boardView.BoardSize = _controller.BoardSize;
 
         // как рисовать доску
-        _boardView.DrawCallback = (g, rect) => _controller.Draw(g, rect);
+        _boardView.DrawCallback = (canvas, rect) => _controller.Draw(canvas, rect);
 
         // что делать при щелчке по клетке
         _boardView.CellClick = (row, col) =>

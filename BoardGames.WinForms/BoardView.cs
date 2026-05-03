@@ -18,7 +18,7 @@ public sealed class BoardView : Control
     /// <summary>Callback отрисовки доски</summary>
     [Browsable(false)]
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-    public Action<Graphics, Rectangle>? DrawCallback { get; set; }
+    public Action<IBoardCanvas, BoardRect>? DrawCallback { get; set; }
 
     /// <summary>Обработка щелчка на поле доски</summary>
     [Browsable(false)]
@@ -38,7 +38,9 @@ public sealed class BoardView : Control
         base.OnPaint(e); // стандартный метод рисования
         e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias; // включить сглаживание
         var rect = GetBoardRect(); // вычисляет область, в которой должна рисоваться доска
-        DrawCallback?.Invoke(e.Graphics, rect); // запуск метода рисования конкретной игры, если он не NULL
+        var canvas = new WinFormsBoardCanvas(e.Graphics);
+        // Запуск метода рисования конкретной игры, если он не NULL
+        DrawCallback?.Invoke(canvas, new BoardRect(rect.Left, rect.Top, rect.Width, rect.Height));
     }
 
     protected override void OnMouseClick(MouseEventArgs e) // переопределение обработчика щелчка мышью

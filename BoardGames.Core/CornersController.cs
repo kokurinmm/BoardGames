@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
-using System.Drawing;
 using System.Linq;
 
 namespace BoardGames;
@@ -114,57 +113,52 @@ public sealed class CornersController : IGameController
         _mcts.Reset(); // перезапуск сеанса MCTS
     }
 
-    public void Draw(Graphics g, Rectangle rect)  // Отрисовка доски
+    public void Draw(IBoardCanvas canvas, BoardRect rect)  // Отрисовка доски
     {
-        int cell = rect.Width / BoardSize;
+        float cell = rect.Width / BoardSize;
 
         for (int row = 0; row < BoardSize; row++)
             for (int col = 0; col < BoardSize; col++)
             {
-                int x = rect.Left + col * cell;
-                int y = rect.Top + row * cell;
+                float x = rect.Left + col * cell;
+                float y = rect.Top + row * cell;
 
-                Color squareColor;
+                GameColor squareColor;
                 if (CornersBoard.IsWhiteHome(row, col))
-                    squareColor = (row + col) % 2 == 0 ? Color.LemonChiffon : Color.Khaki;
+                    squareColor = (row + col) % 2 == 0 ? GameColors.LemonChiffon : GameColors.Khaki;
                 else if (CornersBoard.IsBlackHome(row, col))
-                    squareColor = (row + col) % 2 == 0 ? Color.AliceBlue : Color.LightSteelBlue;
+                    squareColor = (row + col) % 2 == 0 ? GameColors.AliceBlue : GameColors.LightSteelBlue;
                 else
-                    squareColor = (row + col) % 2 == 0 ? Color.Wheat : Color.BurlyWood;
+                    squareColor = (row + col) % 2 == 0 ? GameColors.Wheat : GameColors.BurlyWood;
 
-                using SolidBrush squareBrush = new SolidBrush(squareColor);
-                g.FillRectangle(squareBrush, x, y, cell, cell);
+                canvas.FillRectangle(squareColor, x, y, cell, cell);
             }
 
-        using Pen gridPen = new Pen(Color.SaddleBrown, 1.5f);
         for (int i = 0; i <= BoardSize; i++)
         {
-            int x = rect.Left + i * cell;
-            int y = rect.Top + i * cell;
-            g.DrawLine(gridPen, x, rect.Top, x, rect.Bottom);
-            g.DrawLine(gridPen, rect.Left, y, rect.Right, y);
+            float x = rect.Left + i * cell;
+            float y = rect.Top + i * cell;
+            canvas.DrawLine(GameColors.SaddleBrown, 1.5f, x, rect.Top, x, rect.Bottom);
+            canvas.DrawLine(GameColors.SaddleBrown, 1.5f, rect.Left, y, rect.Right, y);
         }
 
-        // внешние рамки домов
-        using Pen whiteHomePen = new Pen(Color.Goldenrod, 3);
-        using Pen blackHomePen = new Pen(Color.SteelBlue, 3);
-        whiteHomePen.Alignment = System.Drawing.Drawing2D.PenAlignment.Inset;
-        blackHomePen.Alignment = System.Drawing.Drawing2D.PenAlignment.Inset;
-
-        g.DrawRectangle(
-            whiteHomePen,
+        // Внешние рамки домов
+        canvas.DrawRectangle(GameColors.Goldenrod,
+            3,
             rect.Left + 0.5f,
             rect.Top + (BoardSize - CornersBoard.HOME_SIZE) * cell + 0.5f,
             CornersBoard.HOME_SIZE * cell - 1.0f,
             CornersBoard.HOME_SIZE * cell - 1.0f);
 
-        g.DrawRectangle(
-            blackHomePen,
+        canvas.DrawRectangle(
+            GameColors.SteelBlue,
+            3,
             rect.Left + (BoardSize - CornersBoard.HOME_SIZE) * cell + 0.5f,
             rect.Top + 0.5f,
             CornersBoard.HOME_SIZE * cell - 1.0f,
             CornersBoard.HOME_SIZE * cell - 1.0f);
 
+        // Фишки
         for (int row = 0; row < BoardSize; row++)
             for (int col = 0; col < BoardSize; col++)
             {
@@ -172,23 +166,21 @@ public sealed class CornersController : IGameController
                 if (piece == CornersBoard.EMPTY)
                     continue;
 
-                int x = rect.Left + col * cell;
-                int y = rect.Top + row * cell;
+                float x = rect.Left + col * cell;
+                float y = rect.Top + row * cell;
 
-                RectangleF pieceRect = new RectangleF(x + 8, y + 8, cell - 16, cell - 16);
-                using SolidBrush pieceBrush = new SolidBrush(piece == CornersBoard.WHITE ? Color.White : Color.Black);
-                using Pen outline = new Pen(Color.DimGray, 1.5f);
-                g.FillEllipse(pieceBrush, pieceRect);
-                g.DrawEllipse(outline, pieceRect);
+                GameColor pieceColor = piece == CornersBoard.WHITE ? GameColors.White : GameColors.Black;
+                canvas.FillEllipse(pieceColor, x + 8, y + 8, cell - 16, cell - 16);
+                canvas.DrawEllipse(GameColors.DimGray, 1.5f, x + 8, y + 8, cell - 16, cell - 16);
 
                 if (CornersBoard.IsGoalHome(row, col, piece))
                 {
-                    using Pen homeRing = new Pen(piece == CornersBoard.WHITE ? Color.Goldenrod : Color.SteelBlue, 2.5f);
-                    RectangleF ringRect = new RectangleF(x + 13, y + 13, cell - 26, cell - 26);
-                    g.DrawEllipse(homeRing, ringRect);
+                    GameColor ringColor = piece == CornersBoard.WHITE ? GameColors.Goldenrod : GameColors.SteelBlue;
+                    canvas.DrawEllipse(ringColor, 2.5f, x + 13, y + 13, cell - 26, cell - 26);
                 }
             }
 
+        // Подсветка последнего хода ИИ
         if (_lastAiSquare is (int aiRow, int aiCol))
         {
             float x1 = rect.Left + aiCol * cell + 1.5f;
@@ -196,11 +188,10 @@ public sealed class CornersController : IGameController
             float w = cell - 3.5f;
             float h = cell - 3.5f;
 
-            using Pen aiMovePen = new Pen(Color.MediumVioletRed, 3);
-            aiMovePen.Alignment = System.Drawing.Drawing2D.PenAlignment.Inset;
-            g.DrawRectangle(aiMovePen, x1, y1, w, h);
+            canvas.DrawRectangle(GameColors.MediumVioletRed, 3, x1, y1, w, h);
         }
 
+        // Подсветка выбранной фишки и возможных ходов
         if (_selectedPiece is (int selectedRow, int selectedCol))
         {
             float x1 = rect.Left + selectedCol * cell + 1.5f;
@@ -208,9 +199,7 @@ public sealed class CornersController : IGameController
             float w = cell - 3.5f;
             float h = cell - 3.5f;
 
-            using Pen selectionPen = new Pen(Color.DarkBlue, 3);
-            selectionPen.Alignment = System.Drawing.Drawing2D.PenAlignment.Inset;
-            g.DrawRectangle(selectionPen, x1, y1, w, h);
+            canvas.DrawRectangle(GameColors.DarkBlue, 3, x1, y1, w, h);
 
             // Если есть варианты, отмечаем возможные ходы и саму выбранную фишку - щелчок на ней завершает серию прыжков
             if (_jumpContinuationMode && _possibleMoves.Count > 0)
@@ -219,8 +208,7 @@ public sealed class CornersController : IGameController
                 float cy = rect.Top + selectedRow * cell + cell / 2.0f;
                 float radius = cell * 0.18f;
 
-                using SolidBrush dot = new SolidBrush(Color.FromArgb(150, Color.LimeGreen));
-                g.FillEllipse(dot, cx - radius, cy - radius, 2 * radius, 2 * radius);
+                canvas.FillEllipse(GameColors.LimeGreen, cx - radius, cy - radius, 2 * radius, 2 * radius);
             }
 
             foreach (CornersBoard.MoveChain chain in _possibleMoves)
@@ -233,8 +221,7 @@ public sealed class CornersController : IGameController
                 float cy = rect.Top + first.R2 * cell + cell / 2.0f;
                 float radius = cell * 0.18f;
 
-                using SolidBrush dot = new SolidBrush(Color.FromArgb(150, Color.Green));
-                g.FillEllipse(dot, cx - radius, cy - radius, 2 * radius, 2 * radius);
+                canvas.FillEllipse(GameColors.Green, cx - radius, cy - radius, 2 * radius, 2 * radius);
             }
         }
     }

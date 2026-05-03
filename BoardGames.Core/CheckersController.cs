@@ -1,7 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Drawing;
 using System.Linq;
 using System.Text;
 
@@ -111,20 +109,19 @@ public sealed class CheckersController : IGameController
         _mcts.Reset(); // перезапуск сеанса MCTS
     }
 
-    public void Draw(Graphics g, Rectangle rect) // Отрисовка доски
+    public void Draw(IBoardCanvas canvas, BoardRect rect) // Отрисовка доски
     {
-        int cell = rect.Width / BoardSize;
+        float cell = rect.Width / BoardSize;
 
         for (int row = 0; row < BoardSize; row++)
             for (int col = 0; col < BoardSize; col++)
             {
-                int x = rect.Left + col * cell;
-                int y = rect.Top + row * cell;
+                float x = rect.Left + col * cell;
+                float y = rect.Top + row * cell;
 
                 bool dark = (row + col) % 2 == 1;
-                using SolidBrush brush = new SolidBrush(
-                    dark ? Color.Peru : Color.PeachPuff);
-                g.FillRectangle(brush, x, y, cell, cell);
+                GameColor squareColor = dark ? GameColors.Peru : GameColors.PeachPuff;
+                canvas.FillRectangle(squareColor, x, y, cell, cell);
 
                 int piece = _board.Grid[row, col];
                 if (piece != CheckersBoard.EMPTY)
@@ -132,17 +129,14 @@ public sealed class CheckersController : IGameController
                     bool isWhite = piece > 0;
                     bool isKing = CheckersBoard.IsKing(piece);
 
-                    RectangleF pieceRect = new RectangleF(x + 8, y + 8, cell - 16, cell - 16);
-                    using SolidBrush pieceBrush = new SolidBrush(isWhite ? Color.White : Color.Black);
-                    using Pen outline = new Pen(Color.Gray, 1);
-                    g.FillEllipse(pieceBrush, pieceRect);
-                    g.DrawEllipse(outline, pieceRect);
+                    GameColor pieceColor = isWhite ? GameColors.White : GameColors.Black;
+                    canvas.FillEllipse(pieceColor, x + 8, y + 8, cell - 16, cell - 16);
+                    canvas.DrawEllipse(GameColors.Gray, 1, x + 8, y + 8, cell - 16, cell - 16);
 
                     if (isKing)
                     {
-                        using Pen ringPen = new Pen(isWhite ? Color.DodgerBlue : Color.Gold, 3);
-                        RectangleF ringRect = new RectangleF(x + 12, y + 12, cell - 24, cell - 24);
-                        g.DrawEllipse(ringPen, ringRect);
+                        GameColor ringColor = isWhite ? GameColors.DodgerBlue : GameColors.Gold;
+                        canvas.DrawEllipse(ringColor, 3, x + 12, y + 12, cell - 24, cell - 24);
                     }
                 }
             }
@@ -155,9 +149,7 @@ public sealed class CheckersController : IGameController
             float x2 = rect.Left + (aiCol + 1) * cell - 3.5f;
             float y2 = rect.Top + (aiRow + 1) * cell - 3.5f;
 
-            using Pen aiMovePen = new Pen(Color.Firebrick, 3);
-            aiMovePen.Alignment = System.Drawing.Drawing2D.PenAlignment.Inset;
-            g.DrawRectangle(aiMovePen, x1, y1, x2 - x1, y2 - y1);
+            canvas.DrawRectangle(GameColors.Firebrick, 3, x1, y1, x2 - x1, y2 - y1);
         }
 
         // Если пользователь выбрал свою фигуру, выделим её и покажем возможные ходы
@@ -168,9 +160,7 @@ public sealed class CheckersController : IGameController
             float x2 = rect.Left + (selectedCol + 1) * cell - 3.5f;
             float y2 = rect.Top + (selectedRow + 1) * cell - 3.5f;
 
-            using Pen selectionPen = new Pen(Color.Blue, 3);
-            selectionPen.Alignment = System.Drawing.Drawing2D.PenAlignment.Inset;
-            g.DrawRectangle(selectionPen, x1, y1, x2 - x1, y2 - y1);
+            canvas.DrawRectangle(GameColors.Blue, 3, x1, y1, x2 - x1, y2 - y1);
 
             foreach (CheckersBoard.MoveChain chain in _possibleMoves)
             {
@@ -182,8 +172,7 @@ public sealed class CheckersController : IGameController
                 float cy = rect.Top + firstStep.R2 * cell + cell / 2.0f;
                 float radius = cell * 0.18f;
 
-                using SolidBrush dot = new SolidBrush(Color.FromArgb(150, Color.Green));
-                g.FillEllipse(dot, cx - radius, cy - radius, 2 * radius, 2 * radius);
+                canvas.FillEllipse(GameColors.Green, cx - radius, cy - radius, 2 * radius, 2 * radius);
             }
         }
     }

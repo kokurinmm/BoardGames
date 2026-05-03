@@ -6,6 +6,15 @@
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>BoardGames</RootNamespace>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="TestController.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\BoardGames.Core\BoardGames.Core.csproj" />
+  </ItemGroup>
 
 </Project>

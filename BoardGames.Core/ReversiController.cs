@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 
 namespace BoardGames;
@@ -92,20 +93,18 @@ public sealed class ReversiController : IGameController
 
     }
 
-    public void Draw(Graphics g, Rectangle rect) // Отрисовка доски
+    public void Draw(IBoardCanvas canvas, BoardRect rect) // Отрисовка доски
     {
-        int cell = rect.Width / BoardSize;
+        float cell = rect.Width / BoardSize;
 
-        using SolidBrush background = new SolidBrush(Color.DarkGreen);
-        g.FillRectangle(background, rect);
+        canvas.FillRectangle(GameColors.DarkGreen, rect.Left, rect.Top, rect.Width, rect.Height);
 
-        using Pen gridPen = new Pen(Color.Black, 2);
         for (int i = 0; i <= BoardSize; i++)
         {
-            int x = rect.Left + i * cell;
-            int y = rect.Top + i * cell;
-            g.DrawLine(gridPen, x, rect.Top, x, rect.Bottom);
-            g.DrawLine(gridPen, rect.Left, y, rect.Right, y);
+            float x = rect.Left + i * cell;
+            float y = rect.Top + i * cell;
+            canvas.DrawLine(GameColors.Black, 2, x, rect.Top, x, rect.Bottom);
+            canvas.DrawLine(GameColors.Black, 2, rect.Left, y, rect.Right, y);
         }
 
         for (int row = 0; row < BoardSize; row++)
@@ -119,12 +118,14 @@ public sealed class ReversiController : IGameController
                 float cy = rect.Top + row * cell + cell / 2.0f;
                 float radius = cell * 0.42f;
 
-                using SolidBrush brush = new SolidBrush(piece == ReversiBoard.BLACK ? Color.Black : Color.White);
-                using Pen outline = new Pen(Color.Black, 1);
+                GameColor fill = piece == ReversiBoard.BLACK
+                    ? GameColors.Black
+                    : GameColors.White;
 
-                g.FillEllipse(brush, cx - radius, cy - radius, 2 * radius, 2 * radius);
+                canvas.FillEllipse(fill, cx - radius, cy - radius, 2 * radius, 2 * radius);
+
                 if (piece == ReversiBoard.WHITE)
-                    g.DrawEllipse(outline, cx - radius, cy - radius, 2 * radius, 2 * radius);
+                    canvas.DrawEllipse(GameColors.Black, 1, cx - radius, cy - radius, 2 * radius, 2 * radius);
             }
 
         // Подсветка допустимых ходов текущего игрока
@@ -135,21 +136,18 @@ public sealed class ReversiController : IGameController
             float cy = rect.Top + move.X * cell + cell / 2.0f;
             float radius = cell * 0.12f;
 
-            using SolidBrush dot = new SolidBrush(Color.Yellow);
-            g.FillEllipse(dot, cx - radius, cy - radius, 2 * radius, 2 * radius);
+            canvas.FillEllipse(GameColors.Yellow, cx - radius, cy - radius, 2 * radius, 2 * radius);
         }
 
         // Подсветка последнего хода ИИ
         if (_lastAiSquare is (int aiRow, int aiCol))
         {
-            float x1 = rect.Left + aiCol * cell + 1.5f;
-            float y1 = rect.Top + aiRow * cell + 1.5f;
+            float x = rect.Left + aiCol * cell + 1.5f;
+            float y = rect.Top + aiRow * cell + 1.5f;
             float w = cell - 3.5f;
             float h = cell - 3.5f;
 
-            using Pen aiMovePen = new Pen(Color.Crimson, 3);
-            aiMovePen.Alignment = System.Drawing.Drawing2D.PenAlignment.Inset;
-            g.DrawRectangle(aiMovePen, x1, y1, w, h);
+            canvas.DrawRectangle(GameColors.Crimson, 3, x, y, w, h);
         }
 
     }
