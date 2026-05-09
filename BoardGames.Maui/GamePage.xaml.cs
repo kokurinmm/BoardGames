@@ -1,0 +1,203 @@
+namespace BoardGames;
+
+// Код для основной игровой страницы с доской
+
+public partial class GamePage : ContentPage, IQueryAttributable
+{
+    private readonly BoardDrawable _drawable = new();
+
+    private IGameController? _controller; // контроллер конкретной игры
+    private GameOptions? _options; // набор задаваемых пользователем параметров
+
+    private bool _aiLoopRunning;
+
+    public GamePage()
+    {
+        InitializeComponent(); // загрузка интерфейса из XAML
+
+        BoardGraphicsView.Drawable = _drawable; // объект IDrawable для отрисовки доски
+
+        var tap = new TapGestureRecognizer(); // для обработки нажатий пальцем
+        tap.Tapped += OnBoardTapped;
+        BoardGraphicsView.GestureRecognizers.Add(tap);
+    }
+
+    public void ApplyQueryAttributes(IDictionary<string, object> query) // вызывается автоматически после конструктора
+    {
+        if (query.TryGetValue("Options", out object? value) && value is GameOptions options)
+        {
+            _options = options;
+            StartGame(options); // начало новой игры с параметрами, заданными пользователем на стартовой странице
+        }
+    }
+
+    private void StartGame(GameOptions options) // Начало новой партии
+    {
+
+        _controller = options.Kind switch
+        {
+            GameKind.Checkers => new CheckersController(),
+            GameKind.Reversi => new ReversiController(),
+            GameKind.Corners => new CornersController(),
+            _ => new CheckersController()
+        };
+
+        _controller.HumanVsHuman = options.HumanVsHuman;
+        _controller.Mode = options.Mode;
+        _controller.AlphaBetaDepth = Math.Min(options.AlphaBetaDepth, _controller.MaxDepth);
+        _controller.MctsTimeLimitMs = options.MctsTimeLimitMs;
+
+        _controller.NewGame();
+
+        _drawable.Controller = _controller;
+
+        RefreshUiState();
+        BoardGraphicsView.Invalidate();
+
+        _ = MaybeRunAiLoop();
+    }
+
+    private void OnBoardTapped(object? sender, TappedEventArgs e) // Обработка нажатия пальцем
+    {
+        if (_controller is null)
+            return;
+
+        if (_aiLoopRunning || _controller.IsGameOver)
+            return;
+
+        Point? p = e.GetPosition(BoardGraphicsView);
+        if (p is null)
+            return;
+
+        (int row, int col)? cell = _drawable.HitTest(p.Value.X, p.Value.Y);
+        if (cell is null)
+            return;
+
+        _controller.HandleCellClick(cell.Value.row, cell.Value.col); // главная часть обработки здесь
+
+        RefreshUiState();
+
+        BoardGraphicsView.Invalidate(); // надо перерисовать доску
+        
+        _ = MaybeRunAiLoop();
+    }
+
+    /// <summary>
+    /// Асинхронный цикл хода ИИ, с небольшой задержкой без блокирования окна. Может быть несколько ходов подряд
+    /// </summary>
+    private async Task MaybeRunAiLoop()
+    {
+        if (_controller is null)
+            return;
+
+        if (_aiLoopRunning)
+            return;
+
+        _aiLoopRunning = true;
+
+        RefreshUiState();
+
+        try
+        {
+            while (_controller.IsAiTurn && !_controller.IsGameOver)
+            {
+                await Task.Delay(30); // пусть графический интерфейс обновит доску и не блокируется
+
+                bool changed = _controller.BeginAiTurnAnimation();
+
+                RefreshUiState();
+                BoardGraphicsView.Invalidate();
+
+                if (!changed)
+                    break;
+
+                bool firstAiStep = true;
+
+                // Если у подготовленного хода есть визуальные шаги, применяем их по одному с задержками
+                while (_controller.HasPendingAiAnimation && !_controller.IsGameOver)
+                {
+                    await Task.Delay(firstAiStep ? 100 : 500);
+
+                    bool stepChanged = _controller.ApplyNextAiAnimationStep();
+
+                    RefreshUiState();
+                    BoardGraphicsView.Invalidate();
+
+                    if (!stepChanged)
+                        break;
+
+                    firstAiStep = false;
+                }
+
+                // Если после этого ИИ должен ходить ещё раз подряд, сделать паузу между полными ходами
+                if (_controller.IsAiTurn && !_controller.IsGameOver)
+                    await Task.Delay(350);
+            }
+
+            if (_controller.IsGameOver)
+                await DisplayAlertAsync("Конец игры", _controller.GameOverMessage ?? "Игра окончена", "OK");
+        }
+        finally
+        {
+            _aiLoopRunning = false;
+            RefreshUiState();
+        }
+    }
+
+    /// <summary>
+    /// Обновить текстовые метки на странице
+    /// </summary>
+    private void RefreshUiState()
+    {
+        if (_controller is null)
+            return;
+
+        Title = $"{_controller.GameDisplayName} — {_controller.WhitePieceCount} : {_controller.BlackPieceCount}";
+
+        if (_controller.IsGameOver)
+        {
+            StatusLabel.Text = _controller.GameOverMessage ?? "Игра окончена";
+            StatusLabel.TextColor = Colors.DarkGreen;
+            return;
+        }
+
+        if (_controller.HumanVsHuman)
+        {
+            StatusLabel.Text = "Ход: " + _controller.CurrentTurnDisplayName;
+            StatusLabel.TextColor = Colors.DarkBlue;
+            return;
+        }
+
+        StatusLabel.Text = "Вы: " + _controller.HumanPlayerDisplayName;
+        StatusLabel.TextColor = _controller.IsAiTurn ? Colors.Black : Colors.Crimson;
+    }
+
+    private void OnNewGameClicked(object? sender, EventArgs e) // щелчок на кнопке "Новая игра"
+    {
+        if (_options is not null)
+            StartGame(_options);
+    }
+
+    private async void OnBackClicked(object? sender, EventArgs e) // щелчок на кнопке "Назад"
+    {
+        await Shell.Current.GoToAsync(".."); // перейти на предыдущую страницу
+    }
+
+    private void OnBoardHostSizeChanged(object? sender, EventArgs e) // если изменился размер доски
+    {
+        if (BoardHost.Width <= 0 || BoardHost.Height <= 0)
+            return;
+
+        double padding = BoardHost.Padding.HorizontalThickness;
+        double availableWidth = Math.Max(0, BoardHost.Width - padding);
+
+        padding = BoardHost.Padding.VerticalThickness;
+        double availableHeight = Math.Max(0, BoardHost.Height - padding);
+
+        // доска должна быть квадратной, максимально доступного размера
+        double side = Math.Min(availableWidth, availableHeight);
+
+        BoardGraphicsView.WidthRequest = side;
+        BoardGraphicsView.HeightRequest = side;
+    }
+}
