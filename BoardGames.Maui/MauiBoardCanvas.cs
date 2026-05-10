@@ -24,7 +24,11 @@ public sealed class MauiBoardCanvas : IBoardCanvas
     {
         _canvas.StrokeColor = ToMauiColor(color);
         _canvas.StrokeSize = strokeSize;
-        _canvas.DrawRectangle(x, y, width, height);
+        _canvas.DrawRectangle(
+            x + strokeSize / 2.0f,
+            y + strokeSize / 2.0f,
+            width - strokeSize,
+            height - strokeSize);
     }
 
     public void FillEllipse(GameColor color, float x, float y, float width, float height)

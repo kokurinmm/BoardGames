@@ -142,12 +142,9 @@ public sealed class ReversiController : IGameController
         // Подсветка последнего хода ИИ
         if (_lastAiSquare is (int aiRow, int aiCol))
         {
-            float x = rect.Left + aiCol * cell + 1.5f;
-            float y = rect.Top + aiRow * cell + 1.5f;
-            float w = cell - 3.5f;
-            float h = cell - 3.5f;
-
-            canvas.DrawRectangle(GameColors.Crimson, 3, x, y, w, h);
+            float x = rect.Left + aiCol * cell;
+            float y = rect.Top + aiRow * cell;
+            canvas.DrawRectangle(GameColors.Crimson, 3, x, y, cell, cell);
         }
 
     }

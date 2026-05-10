@@ -144,23 +144,17 @@ public sealed class CheckersController : IGameController
         // Подсветка последнего хода ИИ
         if (_lastAiSquare is (int aiRow, int aiCol))
         {
-            float x1 = rect.Left + aiCol * cell + 1.5f;
-            float y1 = rect.Top + aiRow * cell + 1.5f;
-            float x2 = rect.Left + (aiCol + 1) * cell - 3.5f;
-            float y2 = rect.Top + (aiRow + 1) * cell - 3.5f;
-
-            canvas.DrawRectangle(GameColors.Firebrick, 3, x1, y1, x2 - x1, y2 - y1);
+            float x = rect.Left + aiCol * cell;
+            float y = rect.Top + aiRow * cell;
+            canvas.DrawRectangle(GameColors.Firebrick, 3, x, y, cell, cell);
         }
 
         // Если пользователь выбрал свою фигуру, выделим её и покажем возможные ходы
         if (_selectedPiece is (int selectedRow, int selectedCol))
         {
-            float x1 = rect.Left + selectedCol * cell + 1.5f;
-            float y1 = rect.Top + selectedRow * cell + 1.5f;
-            float x2 = rect.Left + (selectedCol + 1) * cell - 3.5f;
-            float y2 = rect.Top + (selectedRow + 1) * cell - 3.5f;
-
-            canvas.DrawRectangle(GameColors.Blue, 3, x1, y1, x2 - x1, y2 - y1);
+            float x = rect.Left + selectedCol * cell;
+            float y = rect.Top + selectedRow * cell;
+            canvas.DrawRectangle(GameColors.Blue, 3, x, y, cell, cell);
 
             foreach (CheckersBoard.MoveChain chain in _possibleMoves)
             {

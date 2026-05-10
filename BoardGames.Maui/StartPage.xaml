@@ -3,7 +3,8 @@
     x:Class="BoardGames.StartPage"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-    Title="Board Games">
+    Title="Board Games"
+    BackgroundColor="OldLace">
 
     <ScrollView>
         <VerticalStackLayout Padding="20" Spacing="16">
@@ -14,7 +15,12 @@
                 TextColor="Gray"
                 HorizontalTextAlignment="Center" />
 
-            <Border Padding="16">
+            <Border
+                Padding="16"
+                BackgroundColor="Ivory"
+                Stroke="Tan"
+                StrokeThickness="1">
+                
                 <VerticalStackLayout Spacing="10">
 
                     <Label Text="Игра" FontAttributes="Bold" />
@@ -30,7 +36,12 @@
                 </VerticalStackLayout>
             </Border>
 
-            <Border Padding="16">
+            <Border
+                Padding="16"
+                BackgroundColor="Ivory"
+                Stroke="Tan"
+                StrokeThickness="1">
+                
                 <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="12">
 
                     <Label
@@ -48,7 +59,13 @@
                 </Grid>
             </Border>
 
-            <Border x:Name="AiSettingsPanel" Padding="16">
+            <Border
+                x:Name="AiSettingsPanel"
+                Padding="16"
+                BackgroundColor="Ivory"
+                Stroke="Tan"
+                StrokeThickness="1">
+                
                 <VerticalStackLayout Spacing="12">
 
                     <Label Text="Алгоритм ИИ" FontAttributes="Bold" />
@@ -107,6 +124,8 @@
                 FontAttributes="Bold"
                 HeightRequest="52"
                 CornerRadius="14"
+                BackgroundColor="SaddleBrown"
+                TextColor="White"
                 Clicked="OnStartClicked" />
 
         </VerticalStackLayout>

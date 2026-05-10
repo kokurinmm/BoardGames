@@ -188,11 +188,13 @@ public partial class GamePage : ContentPage, IQueryAttributable
         if (BoardHost.Width <= 0 || BoardHost.Height <= 0)
             return;
 
-        double padding = BoardHost.Padding.HorizontalThickness;
-        double availableWidth = Math.Max(0, BoardHost.Width - padding);
+        double availableWidth = Math.Max(
+            0,
+            BoardHost.Width - BoardHost.Padding.HorizontalThickness - 2.0 * BoardHost.StrokeThickness);
 
-        padding = BoardHost.Padding.VerticalThickness;
-        double availableHeight = Math.Max(0, BoardHost.Height - padding);
+        double availableHeight = Math.Max(
+            0,
+            BoardHost.Height - BoardHost.Padding.VerticalThickness - 2.0 * BoardHost.StrokeThickness);
 
         // доска должна быть квадратной, максимально доступного размера
         double side = Math.Min(availableWidth, availableHeight);

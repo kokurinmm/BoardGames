@@ -143,20 +143,21 @@ public sealed class CornersController : IGameController
         }
 
         // Внешние рамки домов
-        canvas.DrawRectangle(GameColors.Goldenrod,
+        canvas.DrawRectangle(
+            GameColors.Goldenrod,
             3,
-            rect.Left + 0.5f,
-            rect.Top + (BoardSize - CornersBoard.HOME_SIZE) * cell + 0.5f,
-            CornersBoard.HOME_SIZE * cell - 1.0f,
-            CornersBoard.HOME_SIZE * cell - 1.0f);
+            rect.Left,
+            rect.Top + (BoardSize - CornersBoard.HOME_SIZE) * cell,
+            CornersBoard.HOME_SIZE * cell,
+            CornersBoard.HOME_SIZE * cell);
 
         canvas.DrawRectangle(
             GameColors.SteelBlue,
             3,
-            rect.Left + (BoardSize - CornersBoard.HOME_SIZE) * cell + 0.5f,
-            rect.Top + 0.5f,
-            CornersBoard.HOME_SIZE * cell - 1.0f,
-            CornersBoard.HOME_SIZE * cell - 1.0f);
+            rect.Left + (BoardSize - CornersBoard.HOME_SIZE) * cell,
+            rect.Top,
+            CornersBoard.HOME_SIZE * cell,
+            CornersBoard.HOME_SIZE * cell);
 
         // Фишки
         for (int row = 0; row < BoardSize; row++)
@@ -183,23 +184,17 @@ public sealed class CornersController : IGameController
         // Подсветка последнего хода ИИ
         if (_lastAiSquare is (int aiRow, int aiCol))
         {
-            float x1 = rect.Left + aiCol * cell + 1.5f;
-            float y1 = rect.Top + aiRow * cell + 1.5f;
-            float w = cell - 3.5f;
-            float h = cell - 3.5f;
-
-            canvas.DrawRectangle(GameColors.MediumVioletRed, 3, x1, y1, w, h);
+            float x = rect.Left + aiCol * cell;
+            float y = rect.Top + aiRow * cell;
+            canvas.DrawRectangle(GameColors.MediumVioletRed, 3, x, y, cell, cell);
         }
 
         // Подсветка выбранной фишки и возможных ходов
         if (_selectedPiece is (int selectedRow, int selectedCol))
         {
-            float x1 = rect.Left + selectedCol * cell + 1.5f;
-            float y1 = rect.Top + selectedRow * cell + 1.5f;
-            float w = cell - 3.5f;
-            float h = cell - 3.5f;
-
-            canvas.DrawRectangle(GameColors.DarkBlue, 3, x1, y1, w, h);
+            float x = rect.Left + selectedCol * cell;
+            float y = rect.Top + selectedRow * cell;
+            canvas.DrawRectangle(GameColors.DarkBlue, 3, x, y, cell, cell);
 
             // Если есть варианты, отмечаем возможные ходы и саму выбранную фишку - щелчок на ней завершает серию прыжков
             if (_jumpContinuationMode && _possibleMoves.Count > 0)
