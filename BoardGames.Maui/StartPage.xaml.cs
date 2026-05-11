@@ -45,18 +45,18 @@ public partial class StartPage : ContentPage
 
     private void UpdateDepthMaximum() // Установить max глубину alpha-beta, чтобы не зависала
     {
-        IGameController temp = SelectedGameKind switch
+        int maxDepth = SelectedGameKind switch
         {
-            GameKind.Checkers => new CheckersController(),
-            GameKind.Reversi => new ReversiController(),
-            GameKind.Corners => new CornersController(),
-            _ => new CheckersController()
+            GameKind.Checkers => 10,
+            GameKind.Reversi => 7,
+            GameKind.Corners => 5,
+            _ => 5
         };
 
-        DepthStepper.Maximum = temp.MaxDepth;
+        DepthStepper.Maximum = maxDepth;
 
-        if (DepthStepper.Value > temp.MaxDepth)
-            DepthStepper.Value = temp.MaxDepth;
+        if (DepthStepper.Value > maxDepth)
+            DepthStepper.Value = maxDepth;
 
         DepthLabel.Text = ((int)DepthStepper.Value).ToString();
     }
@@ -95,11 +95,13 @@ public partial class StartPage : ContentPage
             MctsTimeLimitMs = (int)MctsStepper.Value
         };
 
-        await Shell.Current.GoToAsync(
-            nameof(GamePage), // перейти на страницу GamePage, передать параметры партии
-            new Dictionary<string, object>
-            {
-                ["Options"] = options
-            });
+        // открыть GamePage поверх текущей страницы, не блокировать перерисовку страницы, передать параметры партии
+        await Navigation.PushAsync(new GamePage(options));
     }
+
+    private async void OnHelpClicked(object? sender, EventArgs e) // Щелчок на кнопке справки
+    {
+        await Navigation.PushAsync(new HelpPage());
+    }
+
 }

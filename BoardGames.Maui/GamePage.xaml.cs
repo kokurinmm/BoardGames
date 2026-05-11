@@ -2,7 +2,7 @@ namespace BoardGames;
 
 // Код для основной игровой страницы с доской
 
-public partial class GamePage : ContentPage, IQueryAttributable
+public partial class GamePage : ContentPage
 {
     private readonly BoardDrawable _drawable = new();
 
@@ -22,13 +22,11 @@ public partial class GamePage : ContentPage, IQueryAttributable
         BoardGraphicsView.GestureRecognizers.Add(tap);
     }
 
-    public void ApplyQueryAttributes(IDictionary<string, object> query) // вызывается автоматически после конструктора
+    public GamePage(GameOptions options) // конструктор с параметрами - начать новую игру с заданными на StartPage параметрами
+        : this()
     {
-        if (query.TryGetValue("Options", out object? value) && value is GameOptions options)
-        {
-            _options = options;
-            StartGame(options); // начало новой игры с параметрами, заданными пользователем на стартовой странице
-        }
+        _options = options;
+        StartGame(options);
     }
 
     private void StartGame(GameOptions options) // Начало новой партии
@@ -54,7 +52,7 @@ public partial class GamePage : ContentPage, IQueryAttributable
         RefreshUiState();
         BoardGraphicsView.Invalidate();
 
-        _ = MaybeRunAiLoop();
+        _ = StartAiLoopAfterRender();
     }
 
     private void OnBoardTapped(object? sender, TappedEventArgs e) // Обработка нажатия пальцем
@@ -78,8 +76,25 @@ public partial class GamePage : ContentPage, IQueryAttributable
         RefreshUiState();
 
         BoardGraphicsView.Invalidate(); // надо перерисовать доску
-        
+
         _ = MaybeRunAiLoop();
+    }
+
+    /// <summary>
+    /// Делает задержку при старте новой игры, чтобы доска успела нарисоваться, а затем запускает цикл хода ИИ
+    /// </summary>
+    /// <returns></returns>
+    private async Task StartAiLoopAfterRender()
+    {
+        await Task.Delay(150);
+
+        if (_controller is null)
+            return;
+
+        if (!_controller.IsAiTurn)
+            return;
+
+        await MaybeRunAiLoop();
     }
 
     /// <summary>
@@ -135,7 +150,7 @@ public partial class GamePage : ContentPage, IQueryAttributable
             }
 
             if (_controller.IsGameOver)
-                await DisplayAlertAsync("Конец игры", _controller.GameOverMessage ?? "Игра окончена", "OK");
+                await DisplayAlert("Конец игры", _controller.GameOverMessage ?? "Игра окончена", "OK");
         }
         finally
         {
@@ -180,7 +195,7 @@ public partial class GamePage : ContentPage, IQueryAttributable
 
     private async void OnBackClicked(object? sender, EventArgs e) // щелчок на кнопке "Назад"
     {
-        await Shell.Current.GoToAsync(".."); // перейти на предыдущую страницу
+        await Navigation.PopAsync(); // перейти на предыдущую страницу
     }
 
     private void OnBoardHostSizeChanged(object? sender, EventArgs e) // если изменился размер доски

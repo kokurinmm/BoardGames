@@ -118,15 +118,32 @@
                 </VerticalStackLayout>
             </Border>
 
-            <Button
-                Text="Начать игру"
-                FontSize="18"
-                FontAttributes="Bold"
-                HeightRequest="52"
-                CornerRadius="14"
-                BackgroundColor="SaddleBrown"
-                TextColor="White"
-                Clicked="OnStartClicked" />
+            <Grid ColumnDefinitions="*,56" ColumnSpacing="12">
+
+                <Button
+                    Grid.Column="0"
+                    Text="Начать игру"
+                    FontSize="18"
+                    FontAttributes="Bold"
+                    HeightRequest="52"
+                    CornerRadius="14"
+                    BackgroundColor="SaddleBrown"
+                    TextColor="White"
+                    Clicked="OnStartClicked" />
+
+                <Button
+                    Grid.Column="1"
+                    Text="?"
+                    FontSize="22"
+                    FontAttributes="Bold"
+                    HeightRequest="52"
+                    CornerRadius="14"
+                    BackgroundColor="SlateGray"
+                    TextColor="White"
+                    Clicked="OnHelpClicked"
+                    SemanticProperties.Description="Справка" />
+
+            </Grid>
 
         </VerticalStackLayout>
     </ScrollView>

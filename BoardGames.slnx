@@ -1,5 +1,7 @@
 <Solution>
   <Project Path="BoardGames.Core/BoardGames.Core.csproj" />
-  <Project Path="BoardGames.Maui/BoardGames.Maui.csproj" Id="7dbe7eb2-c883-459c-9483-9b473b2eda1e" />
+  <Project Path="BoardGames.Maui/BoardGames.Maui.csproj" Id="7dbe7eb2-c883-459c-9483-9b473b2eda1e">
+    <Deploy Solution="Release|*" />
+  </Project>
   <Project Path="BoardGames.WinForms/BoardGames.WinForms.csproj" />
 </Solution>
