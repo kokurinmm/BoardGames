@@ -1,6 +1,4 @@
-﻿using System.Drawing;
-
-namespace BoardGames;
+﻿namespace BoardGames;
 
 public interface IGameController // Общий интерфейс для всех доступных игр
 {
@@ -21,7 +19,7 @@ public interface IGameController // Общий интерфейс для все�
     bool HumanVsHuman { get; set; } // игра без ИИ
 
     void NewGame(); // начать новую игру
-    void Draw(Graphics g, Rectangle boardRect); // нарисовать доску
+    void Draw(IBoardCanvas canvas, BoardRect boardRect); // нарисовать доску
     void HandleCellClick(int row, int col); // обработка щелчка на поле доски
 
     /// <summary>

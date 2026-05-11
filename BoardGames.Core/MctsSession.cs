@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Diagnostics; // для контроля времени работы алгоритма
 using System.Linq;
 using System.Text;
-using System.Xml.Linq;
 
 namespace BoardGames;
 

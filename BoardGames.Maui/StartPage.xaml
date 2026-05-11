@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    x:Class="BoardGames.StartPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    Title="Board Games"
+    BackgroundColor="OldLace">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="16">
+
+            <Label
+                Text="Выберите игру и алгоритм ИИ"
+                FontSize="15"
+                TextColor="Gray"
+                HorizontalTextAlignment="Center" />
+
+            <Border
+                Padding="16"
+                BackgroundColor="Ivory"
+                Stroke="Tan"
+                StrokeThickness="1">
+                
+                <VerticalStackLayout Spacing="10">
+
+                    <Label Text="Игра" FontAttributes="Bold" />
+
+                    <Picker x:Name="GamePicker" SelectedIndexChanged="OnGameChanged">
+                        <Picker.Items>
+                            <x:String>Шашки</x:String>
+                            <x:String>Реверси</x:String>
+                            <x:String>Уголки</x:String>
+                        </Picker.Items>
+                    </Picker>
+
+                </VerticalStackLayout>
+            </Border>
+
+            <Border
+                Padding="16"
+                BackgroundColor="Ivory"
+                Stroke="Tan"
+                StrokeThickness="1">
+                
+                <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="12">
+
+                    <Label
+                        Grid.Column="0"
+                        Text="Игра с компьютером"
+                        FontAttributes="Bold"
+                        Padding="0,8" />
+
+                    <Switch
+                        x:Name="AiSwitch"
+                        Grid.Column="1"
+                        IsToggled="True"
+                        Toggled="OnAiSwitchToggled" />
+
+                </Grid>
+            </Border>
+
+            <Border
+                x:Name="AiSettingsPanel"
+                Padding="16"
+                BackgroundColor="Ivory"
+                Stroke="Tan"
+                StrokeThickness="1">
+                
+                <VerticalStackLayout Spacing="12">
+
+                    <Label Text="Алгоритм ИИ" FontAttributes="Bold" />
+
+                    <Picker x:Name="AiModePicker" SelectedIndexChanged="OnAiModeChanged">
+                        <Picker.Items>
+                            <x:String>Alpha-beta</x:String>
+                            <x:String>Monte Carlo Tree Search</x:String>
+                        </Picker.Items>
+                    </Picker>
+
+                    <Grid x:Name="DepthPanel" ColumnDefinitions="Auto,Auto,Auto" ColumnSpacing="6">
+                        <Label Text="Глубина:" Padding="0,6"/>
+                        <Label
+                            x:Name="DepthLabel"
+                            Grid.Column="1"
+                            Text="4"
+                            FontAttributes="Bold"
+                            Padding="0,6" />
+                        <Stepper
+                            x:Name="DepthStepper"
+                            Grid.Column="2"
+                            Minimum="3"
+                            Maximum="12"
+                            Increment="1"
+                            Value="4"
+                            ValueChanged="OnDepthChanged" />
+                    </Grid>
+
+                    <Grid x:Name="MctsPanel" ColumnDefinitions="Auto,Auto,Auto" ColumnSpacing="6" IsVisible="False">
+                        <Label Text="Миллисекунд: " Padding="0,6"/>
+                        <Label
+                            x:Name="MctsLabel"
+                            Grid.Column="1"
+                            Text="300"
+                            FontAttributes="Bold"
+                            Padding="0,6" />
+                        <Stepper
+                            x:Name="MctsStepper"
+                            Grid.Column="2"
+                            Minimum="100"
+                            Maximum="10000"
+                            Increment="100"
+                            Value="300"
+                            ValueChanged="OnMctsChanged" />
+                    </Grid>
+
+                    
+
+                </VerticalStackLayout>
+            </Border>
+
+            <Grid ColumnDefinitions="*,56" ColumnSpacing="12">
+
+                <Button
+                    Grid.Column="0"
+                    Text="Начать игру"
+                    FontSize="18"
+                    FontAttributes="Bold"
+                    HeightRequest="52"
+                    CornerRadius="14"
+                    BackgroundColor="SaddleBrown"
+                    TextColor="White"
+                    Clicked="OnStartClicked" />
+
+                <Button
+                    Grid.Column="1"
+                    Text="?"
+                    FontSize="22"
+                    FontAttributes="Bold"
+                    HeightRequest="52"
+                    CornerRadius="14"
+                    BackgroundColor="SlateGray"
+                    TextColor="White"
+                    Clicked="OnHelpClicked"
+                    SemanticProperties.Description="Справка" />
+
+            </Grid>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>
