@@ -112,12 +112,12 @@ public sealed class CheckersController : IGameController
     public void Draw(IBoardCanvas canvas, BoardRect rect) // Отрисовка доски
     {
         float cell = rect.Width / BoardSize;
+        bool flip = ShouldFlipBoard(); // нужно ли рисовать доску повёрнутой, с точки зрения чёрных
 
         for (int row = 0; row < BoardSize; row++)
             for (int col = 0; col < BoardSize; col++)
             {
-                float x = rect.Left + col * cell;
-                float y = rect.Top + row * cell;
+                (float x, float y) = CellTopLeft(rect, cell, row, col, flip);
 
                 bool dark = (row + col) % 2 == 1;
                 GameColor squareColor = dark ? GameColors.Peru : GameColors.PeachPuff;
@@ -144,16 +144,14 @@ public sealed class CheckersController : IGameController
         // Подсветка последнего хода ИИ
         if (_lastAiSquare is (int aiRow, int aiCol))
         {
-            float x = rect.Left + aiCol * cell;
-            float y = rect.Top + aiRow * cell;
+            (float x, float y) = CellTopLeft(rect, cell, aiRow, aiCol, flip);
             canvas.DrawRectangle(GameColors.Firebrick, 3, x, y, cell, cell);
         }
 
         // Если пользователь выбрал свою фигуру, выделим её и покажем возможные ходы
         if (_selectedPiece is (int selectedRow, int selectedCol))
         {
-            float x = rect.Left + selectedCol * cell;
-            float y = rect.Top + selectedRow * cell;
+            (float x, float y) = CellTopLeft(rect, cell, selectedRow, selectedCol, flip);
             canvas.DrawRectangle(GameColors.Blue, 3, x, y, cell, cell);
 
             foreach (CheckersBoard.MoveChain chain in _possibleMoves)
@@ -162,10 +160,10 @@ public sealed class CheckersController : IGameController
                     continue;
 
                 CheckersBoard.MoveStep firstStep = chain.Steps[0];
-                float cx = rect.Left + firstStep.C2 * cell + cell / 2.0f;
-                float cy = rect.Top + firstStep.R2 * cell + cell / 2.0f;
+                (float targetX, float targetY) = CellTopLeft(rect, cell, firstStep.R2, firstStep.C2, flip);
+                float cx = targetX + cell / 2.0f;
+                float cy = targetY + cell / 2.0f;
                 float radius = cell * 0.18f;
-
                 canvas.FillEllipse(GameColors.Green, cx - radius, cy - radius, 2 * radius, 2 * radius);
             }
         }
@@ -181,6 +179,9 @@ public sealed class CheckersController : IGameController
 
         if (!HumanVsHuman && _turn != _humanColor)
             return;
+
+        bool flip = ShouldFlipBoard();
+        (row, col) = DisplayCell(row, col, flip); // переводим экранные координаты в логические - доска может быть повёрнута
 
         _lastAiSquare = null; // сразу снимаем подсветку последнего хода ИИ
 
@@ -431,4 +432,40 @@ public sealed class CheckersController : IGameController
                 GameOverMessage = "Вы победили!";
         }
     }
+
+    /// <summary>
+    /// Нужно ли рисовать доску с точки зрения чёрных (повёрнутой на 180 градусов)
+    /// </summary>
+    private bool ShouldFlipBoard()
+    {
+        if (HumanVsHuman)
+            return _turn == CheckersBoard.BLACK;
+
+        return _humanColor == CheckersBoard.BLACK;
+    }
+
+    /// <summary>
+    /// Если flip==true, повернуть координаты клетки на 180 градусов
+    /// </summary>
+    private (int row, int col) DisplayCell(int row, int col, bool flip)
+    {
+        if (!flip)
+            return (row, col);
+
+        return (BoardSize - 1 - row, BoardSize - 1 - col);
+    }
+
+    /// <summary>
+    /// Левый верхний угол клетки на экране (если flip==true, доска перевёрнута - рисуется с точки зрения чёрных)
+    /// </summary>
+    private (float x, float y) CellTopLeft(BoardRect rect, float cell, int row, int col, bool flip)
+    {
+        (int displayRow, int displayCol) = DisplayCell(row, col, flip);
+
+        float x = rect.Left + displayCol * cell;
+        float y = rect.Top + displayRow * cell;
+
+        return (x, y);
+    }
+
 }
