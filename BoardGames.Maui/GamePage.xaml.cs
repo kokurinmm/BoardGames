@@ -116,7 +116,7 @@ public partial class GamePage : ContentPage
         {
             while (_controller.IsAiTurn && !_controller.IsGameOver)
             {
-                await Task.Delay(30); // пусть графический интерфейс обновит доску и не блокируется
+                await Task.Delay(100); // пусть графический интерфейс обновит доску и не блокируется
 
                 bool changed = _controller.BeginAiTurnAnimation();
 

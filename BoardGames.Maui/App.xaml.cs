@@ -7,6 +7,7 @@ public partial class App : Application
     public App()
     {
         InitializeComponent();
+        UserAppTheme = AppTheme.Light; // переключаемся на светлую тему, чтобы цвета были правильными и предсказуемыми
     }
 
     protected override Window CreateWindow(IActivationState? activationState)
