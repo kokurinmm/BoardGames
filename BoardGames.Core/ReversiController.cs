@@ -19,6 +19,8 @@ public sealed class ReversiController : IGameController
 
     public int BlackPieceCount => _board.Count(ReversiBoard.BLACK);
 
+    public int CurrentFullMoveNumber => _halfMovesPlayed / 2 + 1;
+
     public AiMode Mode { get; set; } = AiMode.AlphaBeta;
     public int AlphaBetaDepth { get; set; } = 4;
     public int MaxDepth { get; set; } = 9;
@@ -43,6 +45,7 @@ public sealed class ReversiController : IGameController
     private int _humanColor; // цвет пользователя
     private int _aiColor; // цвет ИИ
     private int _turn; // игрок, которому принадлежит очередь хода
+    private int _halfMovesPlayed; // количество сделанных полуходов
 
     private (int row, int col)? _lastAiSquare; // клетка, куда сходил ИИ (или пользователь в режиме HumanVsHuman)
 
@@ -78,6 +81,7 @@ public sealed class ReversiController : IGameController
         _board = new ReversiBoard();
 
         _turn = ReversiBoard.BLACK; // в реверси первый ход принадлежит чёрным
+        _halfMovesPlayed = 0;
 
         GameOverMessage = null;
 
@@ -308,19 +312,26 @@ public sealed class ReversiController : IGameController
     /// </summary>
     private void ResolveTurn()
     {
-        _turn = ReversiBoard.Opponent(_turn); // ход сделан, передаём ход противнику
+        int completedSide = _turn; // сторона, чей ход или пас завершился сейчас
+        int nextSide = ReversiBoard.Opponent(completedSide); // противник, которому должен перейти ход
 
-        if (_board.HasAnyMoves(_turn)) // если у него есть допустимые ходы, он и должен ходить
-            return;
-
-        int opponent = ReversiBoard.Opponent(_turn);
-
-        if (_board.HasAnyMoves(opponent)) // у текущего игрока ходов нет, но у противника есть
+        if (_board.HasAnyMoves(nextSide)) // если у nextSide есть допустимые ходы, то он и должен ходить
         {
-            if (!HumanVsHuman && _turn == _aiColor)
-                return; // если нет ходов у ИИ, оставляем очередь хода у ИИ, чтобы он сделал пас - важно для MCTS
+            _halfMovesPlayed++; // завершился ход completedSide
+            _turn = nextSide; // передаём ход nextSide
+            return;
+        }
 
-            _turn = opponent; // если нет ходов у человека, то передаём ход противнику
+        if (_board.HasAnyMoves(completedSide)) // если у nextSide нет ходов, но у completedSide есть
+        {
+            _halfMovesPlayed++; // игра не завершена, учтём завершившийся ход completedSide в счётчике ходов
+            if (!HumanVsHuman && nextSide == _aiColor)
+            {
+                _turn = nextSide; // если противник ИИ, передаём ему ход, пусть сделает пас (для задержки и MCTS)
+                return; // после паса ИИ ResolveTurn() будет вызвана повторно, тогда и обновим счётчик _halfMovesPlayed
+            }
+            _halfMovesPlayed++; // если nextSide - человек, у него пас автоматический (считается за полуход)
+            _turn = completedSide; // передаём ход снова completedSide
             return;
         }
 

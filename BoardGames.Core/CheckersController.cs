@@ -17,6 +17,7 @@ public sealed class CheckersController : IGameController
 
     public int WhitePieceCount => _board.Count(CheckersBoard.WHITE);
     public int BlackPieceCount => _board.Count(CheckersBoard.BLACK);
+    public int CurrentFullMoveNumber => _halfMovesPlayed / 2 + 1;
 
     public AiMode Mode { get; set; } = AiMode.AlphaBeta;
     public int AlphaBetaDepth { get; set; } = 4;
@@ -47,6 +48,7 @@ public sealed class CheckersController : IGameController
     private int _humanColor; // цвет пользователя
     private int _aiColor; // цвет ИИ
     private int _turn; // игрок, которому принадлежит очередь хода
+    private int _halfMovesPlayed; // количество сделанных полуходов
 
     /// <summary>
     /// Выбранная пользователем клетка (или null)
@@ -107,6 +109,7 @@ public sealed class CheckersController : IGameController
          _pendingAiMove = null; // на всякий случай - сброс анимации ИИ-хода
 
         _turn = CheckersBoard.WHITE; // первыми ходят белые
+        _halfMovesPlayed = 0;
 
         // Для игры с ИИ - случайный выбор цветов игроков
         _humanColor = Random.Shared.Next(2) == 0 ? CheckersBoard.WHITE : CheckersBoard.BLACK;
@@ -251,9 +254,11 @@ public sealed class CheckersController : IGameController
             PendingHumanVsHumanTurn = true;
             return;
         }
-
+                
         _turn = CheckersBoard.Opponent(_turn);
         CheckGameOver();
+        if(!IsGameOver)
+            _halfMovesPlayed++; // обновляем счётчик ходов
 
     }
 
@@ -299,6 +304,8 @@ public sealed class CheckersController : IGameController
 
             _turn = CheckersBoard.Opponent(_turn);
             CheckGameOver();
+            if (!IsGameOver)
+                _halfMovesPlayed++; // обновляем счётчик ходов
         }
 
         return true;
@@ -316,6 +323,8 @@ public sealed class CheckersController : IGameController
 
         _turn = CheckersBoard.Opponent(_turn);
         CheckGameOver();
+        if (!IsGameOver)
+            _halfMovesPlayed++; // обновляем счётчик ходов
     }
 
     public bool MakeAiTurn() // не используется, но может пригодиться для игр ИИ друг с другом
@@ -327,6 +336,8 @@ public sealed class CheckersController : IGameController
         _board.ApplyChain(bestMove);
         _turn = CheckersBoard.Opponent(_turn);
         CheckGameOver();
+        if (!IsGameOver)
+            _halfMovesPlayed++; // обновляем счётчик ходов
 
         return true;
     }

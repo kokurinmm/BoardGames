@@ -18,6 +18,16 @@ public sealed class CornersController : IGameController
     public int WhitePieceCount => _board.Count(CornersBoard.WHITE);
     public int BlackPieceCount => _board.Count(CornersBoard.BLACK);
 
+    public int CurrentFullMoveNumber
+    {
+        get
+        {
+            if (IsGameOver)
+                return Math.Max(_board.WhiteMovesPlayed, _board.BlackMovesPlayed);
+            return _turn == CornersBoard.WHITE ? _board.WhiteMovesPlayed + 1 : _board.BlackMovesPlayed + 1;
+        }
+    }
+
     public AiMode Mode { get; set; } = AiMode.AlphaBeta;
     public int AlphaBetaDepth { get; set; } = 4;
     public int MaxDepth { get; set; } = 6;

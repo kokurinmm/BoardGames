@@ -189,7 +189,10 @@ public partial class GamePage : ContentPage
         if (_controller is null)
             return;
 
-        Title = $"{_controller.GameDisplayName} — {_controller.WhitePieceCount} : {_controller.BlackPieceCount}";
+        Title =
+            $"{_controller.GameDisplayName} — " +
+            $"{_controller.WhitePieceCount} : {_controller.BlackPieceCount} — " +
+            $"ход {_controller.CurrentFullMoveNumber}";
 
         if (_controller.IsGameOver)
         {

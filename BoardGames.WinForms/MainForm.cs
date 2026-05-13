@@ -175,7 +175,9 @@ public partial class MainForm : Form
     private void RefreshUiState()
     {
         UpdateAiParamsFromUi();
-        Text = $"{_controller.GameDisplayName} — Белые: {_controller.WhitePieceCount}, Чёрные: {_controller.BlackPieceCount}";
+        Text = $"{_controller.GameDisplayName} — " +
+            $"Белые: {_controller.WhitePieceCount}, Чёрные: {_controller.BlackPieceCount} — " +
+            $"ход {_controller.CurrentFullMoveNumber}";
 
         groupBox2.Enabled = !_controller.HumanVsHuman;
 

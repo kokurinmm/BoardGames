@@ -8,6 +8,7 @@ public interface IGameController // Общий интерфейс для все�
     string GameDisplayName { get; } // имя игры для заголовка формы
     int WhitePieceCount { get; } // количество белых фишек для заголовка формы
     int BlackPieceCount { get; } // количество чёрных фишек для заголовка формы
+    int CurrentFullMoveNumber { get; } // номер текущего полного хода для заголовка формы
 
     AiMode Mode { get; set; } // алгоритм ИИ
     int AlphaBetaDepth { get; set; } // глубина для алгоритма альфа-бета отсечения
