@@ -42,19 +42,23 @@
                 Stroke="Tan"
                 StrokeThickness="1">
                 
-                <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="12">
+                <Grid
+                    ColumnDefinitions="Auto,Auto"
+                    ColumnSpacing="16"
+                    VerticalOptions="Center">
 
                     <Label
                         Grid.Column="0"
                         Text="Игра с компьютером"
                         FontAttributes="Bold"
-                        Padding="0,8" />
+                        VerticalOptions="Center" />
 
                     <Switch
                         x:Name="AiSwitch"
                         Grid.Column="1"
                         IsToggled="True"
-                        Toggled="OnAiSwitchToggled" />
+                        Toggled="OnAiSwitchToggled"
+                        VerticalOptions="Center" />
 
                 </Grid>
             </Border>
@@ -77,14 +81,26 @@
                         </Picker.Items>
                     </Picker>
 
-                    <Grid x:Name="DepthPanel" ColumnDefinitions="Auto,Auto,Auto" ColumnSpacing="6">
-                        <Label Text="Глубина:" Padding="0,6"/>
+                    <Grid
+                        x:Name="DepthPanel"
+                        ColumnDefinitions="Auto,Auto,Auto"
+                        ColumnSpacing="8"
+                        VerticalOptions="Center">
+                        
+                        <Label
+                            Grid.Column="0"
+                            Text="Глубина:"
+                            VerticalOptions="Center"
+                            VerticalTextAlignment="Center" />
+                        
                         <Label
                             x:Name="DepthLabel"
                             Grid.Column="1"
                             Text="4"
                             FontAttributes="Bold"
-                            Padding="0,6" />
+                            VerticalOptions="Center"
+                            VerticalTextAlignment="Center" />
+                        
                         <Stepper
                             x:Name="DepthStepper"
                             Grid.Column="2"
@@ -93,16 +109,30 @@
                             Increment="1"
                             Value="4"
                             ValueChanged="OnDepthChanged" />
+                        
                     </Grid>
 
-                    <Grid x:Name="MctsPanel" ColumnDefinitions="Auto,Auto,Auto" ColumnSpacing="6" IsVisible="False">
-                        <Label Text="Миллисекунд: " Padding="0,6"/>
+                    <Grid
+                        x:Name="MctsPanel"
+                        ColumnDefinitions="Auto,Auto,Auto"
+                        ColumnSpacing="8"
+                        IsVisible="False"
+                        VerticalOptions="Center">
+
+                        <Label
+                            Grid.Column="0"
+                            Text="Миллисекунд:"
+                            VerticalOptions="Center"
+                            VerticalTextAlignment="Center" />
+                        
                         <Label
                             x:Name="MctsLabel"
                             Grid.Column="1"
                             Text="300"
                             FontAttributes="Bold"
-                            Padding="0,6" />
+                            VerticalOptions="Center"
+                            VerticalTextAlignment="Center" />
+                        
                         <Stepper
                             x:Name="MctsStepper"
                             Grid.Column="2"
@@ -111,10 +141,9 @@
                             Increment="100"
                             Value="300"
                             ValueChanged="OnMctsChanged" />
+                        
                     </Grid>
-
                     
-
                 </VerticalStackLayout>
             </Border>
 
