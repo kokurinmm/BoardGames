@@ -52,10 +52,10 @@ public partial class GamePage : ContentPage
         RefreshUiState();
         BoardGraphicsView.Invalidate();
 
-        _ = StartAiLoopAfterRender();
+        _ = StartAiLoopAfterRenderAsync();
     }
 
-    private void OnBoardTapped(object? sender, TappedEventArgs e) // Обработка нажатия пальцем
+    private async void OnBoardTapped(object? sender, TappedEventArgs e) // Обработка нажатия пальцем
     {
         if (_controller is null)
             return;
@@ -77,16 +77,18 @@ public partial class GamePage : ContentPage
 
         BoardGraphicsView.Invalidate(); // надо перерисовать доску
 
-        _ = MaybeRunAiLoop();
+        await MaybeCompleteHumanVsHumanTurnAsync();
+
+        await MaybeRunAiLoopAsync();
     }
 
     /// <summary>
     /// Делает задержку при старте новой игры, чтобы доска успела нарисоваться, а затем запускает цикл хода ИИ
     /// </summary>
     /// <returns></returns>
-    private async Task StartAiLoopAfterRender()
+    private async Task StartAiLoopAfterRenderAsync()
     {
-        await Task.Delay(150);
+        await Task.Delay(200);
 
         if (_controller is null)
             return;
@@ -94,13 +96,13 @@ public partial class GamePage : ContentPage
         if (!_controller.IsAiTurn)
             return;
 
-        await MaybeRunAiLoop();
+        await MaybeRunAiLoopAsync();
     }
 
     /// <summary>
     /// Асинхронный цикл хода ИИ, с небольшой задержкой без блокирования окна. Может быть несколько ходов подряд
     /// </summary>
-    private async Task MaybeRunAiLoop()
+    private async Task MaybeRunAiLoopAsync()
     {
         if (_controller is null)
             return;
@@ -157,6 +159,26 @@ public partial class GamePage : ContentPage
             _aiLoopRunning = false;
             RefreshUiState();
         }
+    }
+
+    /// <summary>
+    /// Если нужно, сделать задержку, а затем вызвать функцию завершения хода в контроллере для режима игры без ИИ
+    /// Актуально для игр типа шашек, с переворачивающейся доской в зависимости от того, чей ход
+    /// </summary>
+    private async Task MaybeCompleteHumanVsHumanTurnAsync()
+    {
+        if (_controller is not CheckersController checkers)
+            return;
+
+        if (!checkers.HumanVsHuman || !checkers.PendingHumanVsHumanTurn)
+            return;
+
+        await Task.Delay(500);
+
+        checkers.CompleteHumanVsHumanTurn();
+
+        RefreshUiState();
+        BoardGraphicsView.Invalidate();
     }
 
     /// <summary>

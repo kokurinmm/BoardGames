@@ -35,6 +35,11 @@ public sealed class CheckersController : IGameController
     public string CurrentTurnDisplayName => Players.CheckersName(_turn);
 
     /// <summary>
+    /// Ход уже сделан, но ещё не передан оппоненту в режиме без ИИ - для задержки перед поворотом доски
+    /// </summary>
+    public bool PendingHumanVsHumanTurn { get; private set; }
+
+    /// <summary>
     /// Текущая позиция на доске
     /// </summary>
     private CheckersBoard _board = CheckersBoard.Initial();
@@ -107,6 +112,8 @@ public sealed class CheckersController : IGameController
         _humanColor = Random.Shared.Next(2) == 0 ? CheckersBoard.WHITE : CheckersBoard.BLACK;
         _aiColor = CheckersBoard.Opponent(_humanColor);
         _mcts.Reset(); // перезапуск сеанса MCTS
+
+        PendingHumanVsHumanTurn = false;
     }
 
     public void Draw(IBoardCanvas canvas, BoardRect rect) // Отрисовка доски
@@ -177,6 +184,9 @@ public sealed class CheckersController : IGameController
         if (IsGameOver)
             return;
 
+        if (HumanVsHuman && PendingHumanVsHumanTurn)
+            return; // идёт задержка между двумя ходами в игре без ИИ, щелчки не обрабатываем
+
         if (!HumanVsHuman && _turn != _humanColor)
             return;
 
@@ -233,7 +243,14 @@ public sealed class CheckersController : IGameController
         _mustContinueJump = false;
 
         if (HumanVsHuman)
+        {
             _lastAiSquare = (step.R2, step.C2); // в режиме без ИИ обводим такой же рамкой, как у ИИ
+
+            // Не передаём ход сразу. Сначала графический интерфейс покажет результат хода с текущей ориентацией доски,
+            // затем после короткой задержки будет вызван CompleteHumanVsHumanTurn и ход будет передан противнику
+            PendingHumanVsHumanTurn = true;
+            return;
+        }
 
         _turn = CheckersBoard.Opponent(_turn);
         CheckGameOver();
@@ -285,6 +302,20 @@ public sealed class CheckersController : IGameController
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Передать ход оппоненту в режиме игры без ИИ после небольшой задержки
+    /// </summary>
+    public void CompleteHumanVsHumanTurn()
+    {
+        if (!PendingHumanVsHumanTurn)
+            return;
+
+        PendingHumanVsHumanTurn = false;
+
+        _turn = CheckersBoard.Opponent(_turn);
+        CheckGameOver();
     }
 
     public bool MakeAiTurn() // не используется, но может пригодиться для игр ИИ друг с другом

@@ -43,7 +43,7 @@ public partial class MainForm : Form
 
         RefreshUiState();
         _boardView.Refresh();
-        _ = MaybeRunAiLoop(); // если игра начинается с хода ИИ
+        _ = MaybeRunAiLoopAsync(); // если игра начинается с хода ИИ
     }
 
     private void InitializeBoardView()
@@ -143,16 +143,19 @@ public partial class MainForm : Form
         _boardView.DrawCallback = (canvas, rect) => _controller.Draw(canvas, rect);
 
         // что делать при щелчке по клетке
-        _boardView.CellClick = (row, col) =>
+        _boardView.CellClick = async (row, col) =>
         {
             if (_aiLoopRunning || _controller.IsGameOver) // во время хода ИИ и после конца игры щелчки не обрабатываем
                 return;
 
             _controller.HandleCellClick(row, col);
+
             RefreshUiState();
             _boardView.Refresh();
             lblStatus.Refresh(); // обновляем цвет надписи
-            _ = MaybeRunAiLoop();
+
+            await MaybeCompleteHumanVsHumanTurnAsync();
+            await MaybeRunAiLoopAsync();
         };
     }
 
@@ -217,7 +220,7 @@ public partial class MainForm : Form
     /// <summary>
     /// Асинхронный цикл хода ИИ, с небольшой задержкой без блокирования окна. Может быть несколько ходов подряд
     /// </summary>
-    private async Task MaybeRunAiLoop()
+    private async Task MaybeRunAiLoopAsync()
     {
         if (_aiLoopRunning)
             return;
@@ -275,6 +278,27 @@ public partial class MainForm : Form
             _aiLoopRunning = false;
             RefreshUiState();
         }
+    }
+
+    /// <summary>
+    /// Если нужно, сделать задержку, а затем вызвать функцию завершения хода в контроллере для режима игры без ИИ
+    /// Актуально для игр типа шашек, с переворачивающейся доской в зависимости от того, чей ход
+    /// </summary>
+    private async Task MaybeCompleteHumanVsHumanTurnAsync()
+    {
+        if (_controller is not CheckersController checkers)
+            return;
+
+        if (!checkers.HumanVsHuman || !checkers.PendingHumanVsHumanTurn)
+            return;
+
+        await Task.Delay(500);
+
+        checkers.CompleteHumanVsHumanTurn();
+
+        RefreshUiState();
+        _boardView.Refresh();
+        lblStatus.Refresh();
     }
 
     /// <summary>
