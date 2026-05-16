@@ -426,8 +426,6 @@ public sealed class CheckersBoard
         if (QuietMoves >= DRAW_NUM)
             return 0.0; // ничья по правилу 15 ходов
 
-        int opponent = Opponent(rootPlayer);
-
         double materialScore = 0.0;
         double advancementScore = 0.0;
 
@@ -450,20 +448,29 @@ public sealed class CheckersBoard
                 if (!IsKing(piece))
                 {
                     // Оценка продвижения: белые идут вверх, чёрные вниз
-                    double advancement =
-                        color == WHITE
-                            ? (BOARD_SIZE - 1 - row) * 0.10
-                            : row * 0.10;
+                    int distanceToKingRow = color == WHITE ? row : BOARD_SIZE - 1 - row;
+                    double advancement = (BOARD_SIZE - 1 - distanceToKingRow) * 0.1;
+
+                    // Если шашка в шаге от превращения в дамку
+                    if (distanceToKingRow == 1)
+                    {
+                        int kingRow = color == WHITE ? 0 : BOARD_SIZE - 1;
+                        bool canPromote =
+                            (InBounds(kingRow, col - 1) && Grid[kingRow, col - 1] == EMPTY) ||
+                            (InBounds(kingRow, col + 1) && Grid[kingRow, col + 1] == EMPTY);
+                        if (canPromote)
+                            advancement += 1.6;
+                    }
 
                     if (color == rootPlayer)
                         advancementScore += advancement;
                     else
                         advancementScore -= advancement;
+
                 }
             }
         }
-        return materialScore
-             + advancementScore;
+        return materialScore + advancementScore;
     }
 
     /// <summary>
