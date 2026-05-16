@@ -89,7 +89,7 @@ public sealed class CheckersController : IGameController
     public CheckersController()
     {
         _mcts = new MctsSession<CheckersBoard, CheckersBoard.MoveChain>(
-            legalMoves: (pos, side) => pos.AllMoves(side),
+            legalMoves: (pos, side) => pos.AllMoves(side, deduplicate: true),
             applyMoveToCopy: (pos, move, side) =>
             {
                 CheckersBoard child = pos.Copy();
@@ -226,7 +226,7 @@ public sealed class CheckersController : IGameController
         {
             _selectedPiece = (row, col);
 
-            List<CheckersBoard.MoveChain> allMoves = _board.AllMoves(_turn);
+            List<CheckersBoard.MoveChain> allMoves = _board.AllMoves(_turn, deduplicate: false);
             _possibleMoves = allMoves
                 .Where(m => m.Steps.Count > 0 && m.Steps[0].R1 == row && m.Steps[0].C1 == col)
                 .ToList();
@@ -393,7 +393,7 @@ public sealed class CheckersController : IGameController
         if (IsGameOver || _turn != _aiColor)
             return null;
 
-        List<CheckersBoard.MoveChain> legalMoves = _board.AllMoves(_turn);
+        List<CheckersBoard.MoveChain> legalMoves = _board.AllMoves(_turn, deduplicate: true);
         if (legalMoves.Count == 0)
         {
             CheckGameOver();
@@ -406,7 +406,7 @@ public sealed class CheckersController : IGameController
         {
             (double score, move) = AlphaBeta.Search(
                 position: _board,
-                legalMoves: (pos, side) => pos.AllMoves(side).OrderByDescending(ch => ch.Length).ToList(),
+                legalMoves: (pos, side) => pos.AllMoves(side, deduplicate: true).OrderByDescending(ch => ch.Length).ToList(),
                 applyMoveToCopy: (pos, moveChain, side) =>
                 {
                     CheckersBoard child = pos.Copy();
@@ -435,7 +435,7 @@ public sealed class CheckersController : IGameController
         {
             move = MonteCarlo.BestMove(
                 position: _board,
-                legalMoves: (pos, side) => pos.AllMoves(side),
+                legalMoves: (pos, side) => pos.AllMoves(side, deduplicate: true),
                 applyMoveToCopy: (pos, moveChain) =>
                 {
                     CheckersBoard child = pos.Copy();
@@ -464,7 +464,7 @@ public sealed class CheckersController : IGameController
 
         while (true)
         {
-            List<CheckersBoard.MoveChain> moves = simulation.AllMoves(side);
+            List<CheckersBoard.MoveChain> moves = simulation.AllMoves(side, deduplicate: true);
             if (moves.Count == 0)
             {
                 int winner = CheckersBoard.Opponent(side);
@@ -489,7 +489,7 @@ public sealed class CheckersController : IGameController
         if (IsGameOver)
             return;
 
-        List<CheckersBoard.MoveChain> moves = _board.AllMoves(_turn);
+        List<CheckersBoard.MoveChain> moves = _board.AllMoves(_turn, deduplicate: false);
         if (moves.Count > 0)
         {
             if (_board.QuietMoves >= CheckersBoard.DRAW_NUM) // если слишком много ходов только дамками без взятий, ничья

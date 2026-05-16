@@ -136,8 +136,10 @@ public sealed class CheckersBoard
 
     /// <summary>
     /// Получить все допустимые ходы игрока (или только простые ходы, или только цепочки взятий)
+    /// Для алгоритмов ИИ надо deduplicate = true: удалять цепочки взятий дамкой с дублирующимся результатом
+    /// Для пользовательского хода надо deduplicate = false: все цепочки доступны
     /// </summary>
-    public List<MoveChain> AllMoves(int player)
+    public List<MoveChain> AllMoves(int player, bool deduplicate)
     {
         List<MoveChain> allJumps = new(); // цепочки взятий
         List<MoveChain> allSlides = new(); // простые ходы
@@ -149,7 +151,7 @@ public sealed class CheckersBoard
                 if (!IsPlayersPiece(piece, player))
                     continue;
 
-                List<MoveChain> jumps = JumpSequencesFrom(row, col);
+                List<MoveChain> jumps = JumpSequencesFrom(row, col, deduplicate);
                 if (jumps.Count > 0)
                 {
                     allJumps.AddRange(jumps);
@@ -207,8 +209,10 @@ public sealed class CheckersBoard
 
     /// <summary>
     /// Все цепочки взятий для фигуры на клетке (row, col)
+    /// Для алгоритмов ИИ надо deduplicate = true: удалять цепочки взятий дамкой с дублирующимся результатом
+    /// Для пользовательского хода надо deduplicate = false: все цепочки доступны
     /// </summary>
-    public List<MoveChain> JumpSequencesFrom(int row, int col)
+    public List<MoveChain> JumpSequencesFrom(int row, int col, bool deduplicate)
     {
         int piece = Grid[row, col]; // фигура, выполняющая цепочку
         if (piece == EMPTY)
@@ -216,9 +220,12 @@ public sealed class CheckersBoard
 
         List<MoveStep> path = new List<MoveStep>(); // здесь будет строиться цепочка взятий
         List<MoveChain> result = new(); // сюда будут сохраняться завершённые цепочки
-        HashSet<Square> capturedSquares = new(); // для клеток с побитыми, но ещё не снятыми с доски фигурами (русские шашки)
+        ulong capturedMask = 0UL; // для хранения клеток с побитыми, но ещё не снятыми с доски фигурами (русские шашки)
 
-        CollectJumpSequences(row, col, piece, path, capturedSquares, result);
+        // здесь будут ключи финальных позиций цепочек для дедупликации, если она включена:
+        HashSet<CaptureResultKey>? finalPositionKeys = deduplicate ? new HashSet<CaptureResultKey>() : null;
+
+        CollectJumpSequences(row, col, piece, path, capturedMask, result, finalPositionKeys);
 
         return result;
     }
@@ -231,8 +238,9 @@ public sealed class CheckersBoard
         int col,
         int piece,
         List<MoveStep> path,
-        HashSet<Square> capturedSquares,
-        List<MoveChain> result)
+        ulong capturedMask,
+        List<MoveChain> result,
+        HashSet<CaptureResultKey>? finalPositionKeys)
     {
         int player = PieceColor(piece);
         int opponent = Opponent(player);
@@ -271,16 +279,15 @@ public sealed class CheckersBoard
                         int oldFrom = Grid[row, col]; // запоминаем состояние, чтобы потом вернуться к нему и продолжить поиск
                         int oldTo = Grid[nr, nc];
 
-                        Grid[row, col] = EMPTY; // изменяем доску и рекурсивно продолжаем построение цепочки
+                        Grid[row, col] = EMPTY; // изменяем доску, обновляем маску, рекурсивно продолжаем построение цепочки
                         Grid[nr, nc] = piece;
-                        capturedSquares.Add(captured);
+                        ulong nextCapturedMask = capturedMask | SquareBit(captured);
 
                         path.Add(step);
-                        CollectJumpSequences(nr, nc, piece, path, capturedSquares, result);
+                        CollectJumpSequences(nr, nc, piece, path, nextCapturedMask, result, finalPositionKeys);
 
                         // откат изменений
                         path.RemoveAt(path.Count - 1);
-                        capturedSquares.Remove(captured);
                         Grid[nr, nc] = oldTo;
                         Grid[row, col] = oldFrom;
 
@@ -293,8 +300,8 @@ public sealed class CheckersBoard
                     if (IsPlayersPiece(cell, opponent))
                     {
                         Square candidate = new Square(nr, nc);
-                                                
-                        if (capturedSquares.Contains(candidate))
+
+                        if (IsCaptured(capturedMask, candidate))
                             break; // уже побитая фигура остаётся препятствием и не может быть побита повторно
 
                         if (seenOpponent)
@@ -322,7 +329,7 @@ public sealed class CheckersBoard
                     continue;
 
                 Square captured = new Square(nr, nc);
-                if (capturedSquares.Contains(captured))
+                if (IsCaptured(capturedMask, captured))
                     continue;
 
                 if (PieceColor(Grid[nr, nc]) != opponent || Grid[jr, jc] != EMPTY)
@@ -341,22 +348,31 @@ public sealed class CheckersBoard
 
                 Grid[row, col] = EMPTY;
                 Grid[jr, jc] = nextPiece;
-                capturedSquares.Add(captured);
+                ulong nextCapturedMask = capturedMask | SquareBit(captured);
 
                 path.Add(step);
-                CollectJumpSequences(jr, jc, nextPiece, path, capturedSquares, result);
+                CollectJumpSequences(jr, jc, nextPiece, path, nextCapturedMask, result, finalPositionKeys);
 
                 // откат изменений
                 path.RemoveAt(path.Count - 1);
-                capturedSquares.Remove(captured);
                 Grid[jr, jc] = oldTo;
                 Grid[row, col] = oldFrom;
             }
         }
 
-        // если продолжений нет, то текущий path - законченная цепочка взятий
+        // Если продолжений нет, то текущий path - законченная цепочка взятий, надо добавить её в result
+        // Если ход был дамкой (или шашкой, превратившейся в дамку) и включена дедупликация, то проверяем дублирование
         if (!foundContinuation && path.Count > 0)
+        {
+            if (finalPositionKeys is not null && IsKing(piece))
+            {
+                CaptureResultKey key = new CaptureResultKey(row,col,capturedMask);
+                if (!finalPositionKeys.Add(key))
+                    return;
+            }
+
             result.Add(new MoveChain(path));
+        }
 
     }
 
@@ -392,6 +408,9 @@ public sealed class CheckersBoard
         }
     }
 
+    /// <summary>
+    /// Удалить с доски все побитые фигуры. Можно передавать цепочку chain или набор шагов chain.Steps
+    /// </summary>
     public void RemoveCapturedPieces(MoveChain chain) => RemoveCapturedPieces(chain.Steps);
 
     /// <summary>
@@ -418,7 +437,7 @@ public sealed class CheckersBoard
     /// </summary>
     public double Evaluate(int rootPlayer, int sideToMove, List<MoveChain>? moves = null, double M = 1_000_000)
     {
-        moves ??= AllMoves(sideToMove);
+        moves ??= AllMoves(sideToMove, deduplicate: false);
 
         if (moves.Count == 0)
             return sideToMove == rootPlayer ? -M : +M; // проигрыш, если некуда ходить
@@ -489,6 +508,17 @@ public sealed class CheckersBoard
     }
 
     /// <summary>
+    /// Обновить счётчик тихих ходов, movingPiece - тип фишки до начала хода
+    /// </summary>
+    public void UpdateQuietCount(MoveStep step, int movingPiece)
+    {
+        if (IsKing(movingPiece) && step.Captured is null)
+            QuietMoves++;
+        else
+            QuietMoves = 0;
+    }
+
+    /// <summary>
     /// Текстовый ключ состояния позиции. Нужен MCTS для переиспользования дерева между ходами
     /// </summary>
     public string GetStateKey()
@@ -515,14 +545,20 @@ public sealed class CheckersBoard
     };
 
     /// <summary>
-    /// Обновить счётчик тихих ходов, movingPiece - тип фишки до начала хода
+    /// Для хранения результата цепочки взятий конкретной дамкой на конкретном ходу. 
+    /// Хранит координаты финальной клетки и битовую маску побитых клеток. 
+    /// Чтобы в алгоритмах ИИ удалять дублирующиеся ходы, приводящие к одному результату (актуально для русских шашек)
     /// </summary>
-    public void UpdateQuietCount(MoveStep step, int movingPiece)
-    {
-        if (IsKing(movingPiece) && step.Captured is null)
-            QuietMoves++;
-        else
-            QuietMoves = 0;
-    }
+    private readonly record struct CaptureResultKey(int Row, int Col, ulong CapturedMask);
+
+    /// <summary>
+    /// Битовая маска с одним установленным битом, соответствующим заданной клетке доски
+    /// </summary>
+    private static ulong SquareBit(Square sq) => 1UL << (sq.R * BOARD_SIZE + sq.C);
+
+    /// <summary>
+    /// Установлен ли в маске бит, соответствующий клетке sq, т.е. побита ли клетка согласно этой маске
+    /// </summary>
+    private static bool IsCaptured(ulong mask, Square sq) => (mask & SquareBit(sq)) != 0;
 
 }
