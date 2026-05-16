@@ -15,9 +15,15 @@ public partial class MainForm : Form
 
     private bool _playWithoutAi; // игра без ИИ
 
+    private bool _settingMctsMs; // устанавливается значение счётчика миллисекунд, не вызывать событие
+
+    private int _currentMctsIndex = AiParameterScales.DefaultMctsIndex; // индекс в шкале миллисекунд MCTS по умолчанию
+
     public MainForm()
     {
         InitializeComponent();
+
+        ConfigureMctsTimeScale(); // настройка счётчика миллисекунд для MCTS - там будет неравномерная шкала
 
         InitializeBoardView(); // подключаем BoardView к панели
 
@@ -97,6 +103,18 @@ public partial class MainForm : Form
 
         nudMctsMs.ValueChanged += (_, __) =>
         {
+            if (_settingMctsMs) // если изменение счётчика происходит в коде, ничего не делать
+                return;
+
+            int raw = (int)nudMctsMs.Value; // шаг задан равным 1, так что это на 1 больше или меньше предыдущего значения
+
+            if (raw > AiParameterScales.MctsMs[_currentMctsIndex])
+                SetMctsValue(_currentMctsIndex + 1);
+            else if (raw < AiParameterScales.MctsMs[_currentMctsIndex])
+                SetMctsValue(_currentMctsIndex - 1);
+            else
+                SetMctsValue(_currentMctsIndex);
+
             _controller.MctsTimeLimitMs = (int)nudMctsMs.Value;
         };
 
@@ -166,7 +184,7 @@ public partial class MainForm : Form
     {
         _controller.Mode = rbAlphaBeta.Checked ? AiMode.AlphaBeta : AiMode.Mcts;
         _controller.AlphaBetaDepth = (int)nudDepth.Value;
-        _controller.MctsTimeLimitMs = (int)nudMctsMs.Value;
+        _controller.MctsTimeLimitMs = AiParameterScales.MctsMs[_currentMctsIndex];
     }
 
     /// <summary>
@@ -313,6 +331,35 @@ public partial class MainForm : Form
             "Конец игры",
             MessageBoxButtons.OK,
             MessageBoxIcon.Information);
+    }
+
+    private void ConfigureMctsTimeScale()
+    {
+
+        nudMctsMs.Minimum = AiParameterScales.MctsMs[0];
+        nudMctsMs.Maximum = AiParameterScales.MctsMs[^1];
+
+        nudMctsMs.Increment = 1; // фактический шаг будет не 1, а переход к соседнему значению шкалы
+        nudMctsMs.ReadOnly = true;
+
+        SetMctsValue(AiParameterScales.DefaultMctsIndex);
+    }
+
+    /// <summary>
+    /// Установить значение счётчика миллисекунд по индексу в шкале
+    /// </summary>
+    private void SetMctsValue(int index)
+    {
+        if (index < 0)
+            index = 0;
+        int max = AiParameterScales.MctsMs.Length - 1;
+        if (index > max)
+            index = max;
+
+        _settingMctsMs = true; // изменяем Value в коде, вызывать событие не нужно
+        nudMctsMs.Value = AiParameterScales.MctsMs[index];
+        _settingMctsMs = false;
+        _currentMctsIndex = index;
     }
 
     private void btnHelp_Click(object sender, EventArgs e)

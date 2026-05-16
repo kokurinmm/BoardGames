@@ -136,10 +136,10 @@
                         <Stepper
                             x:Name="MctsStepper"
                             Grid.Column="2"
-                            Minimum="100"
-                            Maximum="10000"
-                            Increment="100"
-                            Value="300"
+                            Minimum="0"
+                            Maximum="23"
+                            Increment="1"
+                            Value="14"
                             ValueChanged="OnMctsChanged" />
                         
                     </Grid>
