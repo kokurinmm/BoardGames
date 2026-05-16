@@ -65,6 +65,12 @@ public sealed class CheckersBoard
     public static bool IsPlayersPiece(int piece, int player) => piece != EMPTY && PieceColor(piece) == player;
 
     /// <summary>
+    /// Является ли этот ряд целевым для фигуры piece (для превращения в дамку)
+    /// </summary>
+    public static bool IsKingRow(int piece, int row) =>
+        piece > 0 && row == 0 || piece < 0 && row == BOARD_SIZE - 1;
+
+    /// <summary>
     /// Создание стартовой позиции
     /// </summary>
     public static CheckersBoard Initial()
@@ -201,27 +207,31 @@ public sealed class CheckersBoard
 
     /// <summary>
     /// Все цепочки взятий для фигуры на клетке (row, col)
-    /// currentSequence хранит уже пройденную часть цепочки.
     /// </summary>
     public List<MoveChain> JumpSequencesFrom(int row, int col)
     {
-        int piece = Grid[row, col];
+        int piece = Grid[row, col]; // фигура, выполняющая цепочку
         if (piece == EMPTY)
             return new List<MoveChain>();
 
-        List<MoveStep> path = new List<MoveStep>();
-        List<MoveChain> result = new();
+        List<MoveStep> path = new List<MoveStep>(); // здесь будет строиться цепочка взятий
+        List<MoveChain> result = new(); // сюда будут сохраняться завершённые цепочки
+        HashSet<Square> capturedSquares = new(); // для клеток с побитыми, но ещё не снятыми с доски фигурами (русские шашки)
 
-        CollectJumpSequences(row, col, piece, path, result);
+        CollectJumpSequences(row, col, piece, path, capturedSquares, result);
 
         return result;
     }
 
+    /// <summary>
+    /// Рекурсивный поиск продолжений уже построенных цепочек из текущей клетки (row,col)
+    /// </summary>
     private void CollectJumpSequences(
         int row,
         int col,
         int piece,
         List<MoveStep> path,
+        HashSet<Square> capturedSquares,
         List<MoveChain> result)
     {
         int player = PieceColor(piece);
@@ -231,13 +241,12 @@ public sealed class CheckersBoard
         (int dr, int dc)[] directions = { (-1, -1), (-1, 1), (1, -1), (1, 1) };
         bool foundContinuation = false;
 
-        if (isKing) // возможные цепочки взятий для дамки - временно выполняем каждое на доске и продолжаем рекурсивно
+        if (isKing) // возможные цепочки взятий для дамки
         {
             foreach ((int dr, int dc) in directions)
             {
                 bool seenOpponent = false;
-                int capturedRow = -1;
-                int capturedCol = -1;
+                Square captured = default;
 
                 for (int dist = 1; dist < BOARD_SIZE; dist++)
                 {
@@ -251,45 +260,48 @@ public sealed class CheckersBoard
 
                     if (cell == EMPTY)
                     {
-                        if (!seenOpponent)
+                        if (!seenOpponent) // свободно движемся по диагонали
                             continue;
 
-                        // приземляемся после единственной встреченной фигуры противника
+                        // если seenOpponent== true, значит перепрыгнули через фигуру противника (и она записана в captured)
                         foundContinuation = true;
 
-                        MoveStep step = new MoveStep(row, col, nr, nc, new Square(capturedRow, capturedCol));
+                        MoveStep step = new MoveStep(row, col, nr, nc, captured);
 
-                        int oldFrom = Grid[row, col];
-                        int oldCaptured = Grid[capturedRow, capturedCol];
+                        int oldFrom = Grid[row, col]; // запоминаем состояние, чтобы потом вернуться к нему и продолжить поиск
                         int oldTo = Grid[nr, nc];
 
-                        Grid[row, col] = EMPTY;
-                        Grid[capturedRow, capturedCol] = EMPTY;
+                        Grid[row, col] = EMPTY; // изменяем доску и рекурсивно продолжаем построение цепочки
                         Grid[nr, nc] = piece;
+                        capturedSquares.Add(captured);
 
                         path.Add(step);
-                        CollectJumpSequences(nr, nc, piece, path, result);
+                        CollectJumpSequences(nr, nc, piece, path, capturedSquares, result);
 
                         // откат изменений
                         path.RemoveAt(path.Count - 1);
+                        capturedSquares.Remove(captured);
                         Grid[nr, nc] = oldTo;
-                        Grid[capturedRow, capturedCol] = oldCaptured;
                         Grid[row, col] = oldFrom;
 
-                        break;
+                        continue; // в русских шашках можно приземлиться не обязательно на ближайшем поле после побитой фигуры
                     }
 
-                    if (IsPlayersPiece(cell, player))
+                    if (IsPlayersPiece(cell, player)) // перепрыгивать свою фигуру нельзя
                         break;
 
-                    if (PieceColor(cell) == opponent)
+                    if (IsPlayersPiece(cell, opponent))
                     {
+                        Square candidate = new Square(nr, nc);
+                                                
+                        if (capturedSquares.Contains(candidate))
+                            break; // уже побитая фигура остаётся препятствием и не может быть побита повторно
+
                         if (seenOpponent)
                             break;
 
                         seenOpponent = true;
-                        capturedRow = nr;
-                        capturedCol = nc;
+                        captured = candidate;
                         continue;
                     }
 
@@ -309,32 +321,35 @@ public sealed class CheckersBoard
                 if (!InBounds(nr, nc) || !InBounds(jr, jc))
                     continue;
 
+                Square captured = new Square(nr, nc);
+                if (capturedSquares.Contains(captured))
+                    continue;
+
                 if (PieceColor(Grid[nr, nc]) != opponent || Grid[jr, jc] != EMPTY)
                     continue;
 
                 foundContinuation = true;
 
-                int nextPiece = piece;
-                if ((player == WHITE && jr == 0) || (player == BLACK && jr == BOARD_SIZE - 1))
+                int nextPiece = piece; // кем станет шашка piece после хода - останется шашкой или превратится в дамку
+                if (IsKingRow(piece, jr))
                     nextPiece = MakeKing(piece);
 
-                MoveStep step = new MoveStep(row, col, jr, jc, new Square(nr, nc));
+                MoveStep step = new MoveStep(row, col, jr, jc, captured);
 
                 int oldFrom = Grid[row, col];
-                int oldCaptured = Grid[nr, nc];
                 int oldTo = Grid[jr, jc];
 
                 Grid[row, col] = EMPTY;
-                Grid[nr, nc] = EMPTY;
                 Grid[jr, jc] = nextPiece;
+                capturedSquares.Add(captured);
 
                 path.Add(step);
-                CollectJumpSequences(jr, jc, nextPiece, path, result);
+                CollectJumpSequences(jr, jc, nextPiece, path, capturedSquares, result);
 
                 // откат изменений
                 path.RemoveAt(path.Count - 1);
+                capturedSquares.Remove(captured);
                 Grid[jr, jc] = oldTo;
-                Grid[nr, nc] = oldCaptured;
                 Grid[row, col] = oldFrom;
             }
         }
@@ -347,21 +362,37 @@ public sealed class CheckersBoard
 
     /// <summary>
     /// Выполнить на доске один ход (простой или одно взятие из цепочки)
+    /// Для анимации в русских шашках нужно removeCaptured=false: побитые фигуры не удаляются сразу с доски
+    /// Для их удаления надо будет вызвать RemoveCapturedPieces после окончания цепочки
     /// </summary>
-    public void ApplyStep(MoveStep step)
+    public void ApplyStep(MoveStep step, bool removeCaptured)
     {
         int piece = Grid[step.R1, step.C1];
         Grid[step.R2, step.C2] = piece;
         Grid[step.R1, step.C1] = EMPTY;
 
-        if (step.Captured is Square captured)
+        if (step.Captured is Square captured && removeCaptured)
             Grid[captured.R, captured.C] = EMPTY;
 
-        if (piece > 0 && step.R2 == 0)
-            Grid[step.R2, step.C2] = W_KING;
-        else if (piece < 0 && step.R2 == BOARD_SIZE - 1)
-            Grid[step.R2, step.C2] = B_KING;
+        if (IsKingRow(piece, step.R2))
+            Grid[step.R2, step.C2] = MakeKing(piece);
     }
+
+    /// <summary>
+    /// Удалить с доски все побитые фигуры. Можно передавать цепочку chain или набор шагов chain.Steps
+    /// </summary>
+    public void RemoveCapturedPieces(IEnumerable<MoveStep> steps)
+    {
+        foreach (MoveStep step in steps)
+        {
+            if (step.Captured is not Square captured)
+                continue;
+
+            Grid[captured.R, captured.C] = EMPTY;
+        }
+    }
+
+    public void RemoveCapturedPieces(MoveChain chain) => RemoveCapturedPieces(chain.Steps);
 
     /// <summary>
     /// Выполнить на доске полный ход (простой или цепочку взятий)
@@ -375,8 +406,9 @@ public sealed class CheckersBoard
         int movingPiece = Grid[first.R1, first.C1];
 
         foreach (MoveStep step in chain.Steps)
-            ApplyStep(step);
+            ApplyStep(step, removeCaptured: false);
 
+        RemoveCapturedPieces(chain);
         UpdateQuietCount(first, movingPiece);
     }
 
@@ -393,8 +425,6 @@ public sealed class CheckersBoard
 
         if (QuietMoves >= DRAW_NUM)
             return 0.0; // ничья по правилу 15 ходов
-
-        int opponent = Opponent(rootPlayer);
 
         double materialScore = 0.0;
         double advancementScore = 0.0;
@@ -418,20 +448,29 @@ public sealed class CheckersBoard
                 if (!IsKing(piece))
                 {
                     // Оценка продвижения: белые идут вверх, чёрные вниз
-                    double advancement =
-                        color == WHITE
-                            ? (BOARD_SIZE - 1 - row) * 0.10
-                            : row * 0.10;
+                    int distanceToKingRow = color == WHITE ? row : BOARD_SIZE - 1 - row;
+                    double advancement = (BOARD_SIZE - 1 - distanceToKingRow) * 0.1;
+
+                    // Если шашка в шаге от превращения в дамку
+                    if (distanceToKingRow == 1)
+                    {
+                        int kingRow = color == WHITE ? 0 : BOARD_SIZE - 1;
+                        bool canPromote =
+                            (InBounds(kingRow, col - 1) && Grid[kingRow, col - 1] == EMPTY) ||
+                            (InBounds(kingRow, col + 1) && Grid[kingRow, col + 1] == EMPTY);
+                        if (canPromote)
+                            advancement += 1.6;
+                    }
 
                     if (color == rootPlayer)
                         advancementScore += advancement;
                     else
                         advancementScore -= advancement;
+
                 }
             }
         }
-        return materialScore
-             + advancementScore;
+        return materialScore + advancementScore;
     }
 
     /// <summary>

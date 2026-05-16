@@ -70,6 +70,17 @@ public sealed class CheckersController : IGameController
     /// </summary>
     private bool _mustContinueJump;
 
+    /// <summary>
+    /// Выполненные шаги текущей пользовательской цепочки взятий. 
+    /// Нужны потому, что в русских шашках побитые фигуры снимаются с доски только после завершения цепочки
+    /// </summary>
+    private readonly List<CheckersBoard.MoveStep> _currentHumanMoveSteps = new();
+
+    /// <summary>
+    /// Побитые фигуры, ещё не удалённые с доски
+    /// </summary>
+    private readonly HashSet<CheckersBoard.Square> _capturedButNotRemoved = new();
+
     private CheckersBoard.MoveChain? _pendingAiMove; // текущий ход или цепочка ходов ИИ, для анимации
     private int _pendingAiStepIndex; // текущий шаг в цепочке ходов ИИ, для анимации
 
@@ -104,6 +115,8 @@ public sealed class CheckersController : IGameController
         _lastAiSquare = null;
         _possibleMoves.Clear();
         _mustContinueJump = false;
+        _currentHumanMoveSteps.Clear();
+        _capturedButNotRemoved.Clear();
         GameOverMessage = null;
 
          _pendingAiMove = null; // на всякий случай - сброс анимации ИИ-хода
@@ -156,6 +169,16 @@ public sealed class CheckersController : IGameController
         {
             (float x, float y) = CellTopLeft(rect, cell, aiRow, aiCol, flip);
             canvas.DrawRectangle(GameColors.Firebrick, 3, x, y, cell, cell);
+        }
+
+        // Помечаем побитые, но не снятые с доски фигуры
+        foreach (CheckersBoard.Square captured in _capturedButNotRemoved)
+        {
+            (float x, float y) = CellTopLeft(rect, cell, captured.R, captured.C, flip);
+            float inset = cell * 0.3f;
+            float stroke = Math.Max(2.0f, cell * 0.08f); // толщина, чтобы хорошо выглядела на разных экранах
+            canvas.DrawLine(GameColors.Crimson, stroke, x + inset, y + inset, x + cell - inset, y + cell - inset);
+            canvas.DrawLine(GameColors.Crimson, stroke, x + cell - inset, y + inset, x + inset, y + cell - inset);
         }
 
         // Если пользователь выбрал свою фигуру, выделим её и покажем возможные ходы
@@ -213,7 +236,7 @@ public sealed class CheckersController : IGameController
         if (_selectedPiece is null)
             return;
 
-        // Ищем цепочки, у которых первый шаг ведёт в выбранную клетку
+        // Ищем цепочки, у которых первый ещё не выполненный шаг ведёт в выбранную клетку
         List<CheckersBoard.MoveChain> matching = _possibleMoves
             .Where(chain => chain.Steps.Count > 0 && chain.Steps[0].R2 == row && chain.Steps[0].C2 == col)
             .ToList();
@@ -224,12 +247,19 @@ public sealed class CheckersController : IGameController
         CheckersBoard.MoveStep step = matching[0].Steps[0];
         int movingPiece = _board.Grid[step.R1, step.C1];
 
-        _board.ApplyStep(step);
+        _board.ApplyStep(step, false);
 
-        // Если это было взятие, проверяем, нужно ли продолжать цепочку
-        if (step.Captured.HasValue)
+        if (step.Captured.HasValue) // если это взятие
         {
-            List<CheckersBoard.MoveChain> continuations = _board.JumpSequencesFrom(row, col);
+            _currentHumanMoveSteps.Add(step);
+            if (step.Captured is CheckersBoard.Square captured)
+                _capturedButNotRemoved.Add(captured); // надо отметить побитую фигуру
+
+            // Убираем из цепочек matching первый шаг, убираем нулевые цепочки - это возможные продолжения, если они есть
+            List<CheckersBoard.MoveChain> continuations = matching
+                .Select(chain => new CheckersBoard.MoveChain(chain.Steps.Skip(1)))
+                .Where(chain => chain.Steps.Count > 0)
+                .ToList();
             if (continuations.Count > 0)
             {
                 _selectedPiece = (row, col);
@@ -237,13 +267,18 @@ public sealed class CheckersController : IGameController
                 _mustContinueJump = true;
                 return;
             }
-        }
 
+            _board.RemoveCapturedPieces(_currentHumanMoveSteps); // если продолжений нет, убираем побитые фигуры с доски
+
+        }
+    
         _board.UpdateQuietCount(step, movingPiece);
 
         _selectedPiece = null;
         _possibleMoves.Clear();
         _mustContinueJump = false;
+        _currentHumanMoveSteps.Clear();
+        _capturedButNotRemoved.Clear();
 
         if (HumanVsHuman)
         {
@@ -269,6 +304,8 @@ public sealed class CheckersController : IGameController
 
         _pendingAiMove = FindBestAiMove();
         _pendingAiStepIndex = 0;
+        _currentHumanMoveSteps.Clear();
+        _capturedButNotRemoved.Clear();
 
         if (_pendingAiMove is null || _pendingAiMove.Steps.Count == 0)
             return false;
@@ -290,7 +327,10 @@ public sealed class CheckersController : IGameController
         if (!HasPendingAiAnimation || _pendingAiMove is null)
             return false;
 
-        _board.ApplyStep(_pendingAiMove.Steps[_pendingAiStepIndex]);
+        CheckersBoard.MoveStep step = _pendingAiMove.Steps[_pendingAiStepIndex]; // подготовленный шаг хода ИИ
+        _board.ApplyStep(step, removeCaptured: false);
+        if (step.Captured is CheckersBoard.Square captured)
+            _capturedButNotRemoved.Add(captured);
         _pendingAiStepIndex++;
 
         // если это был последний шаг, завершаем ход
@@ -298,6 +338,9 @@ public sealed class CheckersController : IGameController
         {
             CheckersBoard.MoveStep last = _pendingAiMove.Steps[^1];
             _lastAiSquare = (last.R2, last.C2);
+
+            _board.RemoveCapturedPieces(_pendingAiMove);
+            _capturedButNotRemoved.Clear();
 
             _pendingAiMove = null;
             _pendingAiStepIndex = 0;

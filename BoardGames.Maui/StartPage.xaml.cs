@@ -57,7 +57,7 @@ public partial class StartPage : ContentPage
     {
         int maxDepth = SelectedGameKind switch
         {
-            GameKind.Checkers => 10,
+            GameKind.Checkers => 9,
             GameKind.Reversi => 7,
             GameKind.Corners => 5,
             _ => 5
