@@ -265,7 +265,7 @@ public sealed class CornersBoard
     /// <summary>
     /// Найти все цепочки прыжков из клетки (row, col) для игрока player, с учётом антиничейных ограничений
     /// Если это продолжение цепочки currentSequence, начало указано в (origStartRow,origStartCol) - важно для ограничений
-    /// Остановка после любого прыжка разрешена, нельзя повторно посещать visitedSquares
+    /// Остановка после любого прыжка разрешена, нельзя повторно посещать клетки, сохранённые в visitedMask
     /// Для каждой конечной клетки сохраняется только одна цепочка ходов
     /// </summary>
     public List<MoveChain> JumpSequencesFrom(
@@ -275,7 +275,7 @@ public sealed class CornersBoard
         int? origStartRow = null,
         int? origStartCol = null,
         List<MoveStep>? currentSequence = null,
-        HashSet<Square>? visitedSquares = null)
+        ulong? visitedMask = null)
     {
         int piece = Grid[row, col];
         if (piece != player)
@@ -289,12 +289,11 @@ public sealed class CornersBoard
             ? new List<MoveStep>()
             : new List<MoveStep>(currentSequence);
 
-        HashSet<Square> visited =
-            visitedSquares is null
-                ? new HashSet<Square> { new Square(row, col) }
-                : new HashSet<Square>(visitedSquares);
+        // На всякий случай: если visitedMask не задана, восстанавливаем её из пройденного участка цепочки path
+        ulong startVisitedMask = visitedMask ?? BuildVisitedMask(row, col, path);
 
-        Dictionary<Square, MoveChain> squareChainDict = new();
+        // На каждую клетку доски будем сохранять не более одной цепочки, ведущей в эту клетку, чтобы не было дублирования
+        MoveChain?[] chains = new MoveChain?[BOARD_SIZE * BOARD_SIZE];
 
         CollectJumpSequences(
             row,
@@ -304,10 +303,16 @@ public sealed class CornersBoard
             startCol,
             piece,
             path,
-            visited,
-            squareChainDict);
+            startVisitedMask,
+            chains);
 
-        return squareChainDict.Values.ToList();
+        List<MoveChain> result = new(); // сохраняем собранные цепочки в список
+        foreach (MoveChain? chain in chains)
+        {
+            if (chain is not null)
+                result.Add(chain);
+        }
+        return result;
     }
 
     private void CollectJumpSequences(
@@ -318,8 +323,8 @@ public sealed class CornersBoard
         int startCol,
         int piece,
         List<MoveStep> path,
-        HashSet<Square> visited,
-        Dictionary<Square, MoveChain> squareChainDict)
+        ulong visitedMask,
+        MoveChain?[] chains)
     { 
         foreach ((int dr, int dc) in DIRECTIONS)
         {
@@ -334,22 +339,22 @@ public sealed class CornersBoard
             if (Grid[overRow, overCol] == EMPTY || Grid[landRow, landCol] != EMPTY)
                 continue;
 
-            Square landing = new Square(landRow, landCol);
+            ulong landingBit = SquareBit(landRow, landCol);
 
-            if (visited.Contains(landing))
-                continue;
+            if ((visitedMask & landingBit) != 0)
+                continue; // запрет на повторное посещение клеток, записанных в visitedMask, в рамках одной цепочки
 
             if (!IsAllowed(player, startRow, startCol, landRow, landCol))
                 continue;
 
             MoveStep step = new MoveStep(row, col, landRow, landCol);
 
-            // применяем шаг к текущему пути, сохраняем цепочку (с учётом того, что в ней важны лишь старт и финиш),
+            // Применяем шаг к текущему пути, сохраняем цепочку (с учётом того, что в ней важны лишь старт и финиш),
             // затем временно применяем шаг к доске и продолжаем рекурсивно
 
             path.Add(step);
-            visited.Add(landing);
-            SaveChain(squareChainDict, new MoveChain(path));
+            ulong nextVisitedMask = visitedMask | landingBit; // включаем посещённую клетку landingBit в visitedMask
+            SaveChain(chains, new MoveChain(path));
 
             Grid[row, col] = EMPTY;
             Grid[landRow, landCol] = piece;
@@ -362,13 +367,12 @@ public sealed class CornersBoard
                 startCol,
                 piece,
                 path,
-                visited,
-                squareChainDict);
+                nextVisitedMask,
+                chains);
 
             // откат изменений
             Grid[landRow, landCol] = EMPTY;
             Grid[row, col] = piece;
-            visited.Remove(landing);
             path.RemoveAt(path.Count - 1);
 
         }
@@ -415,6 +419,45 @@ public sealed class CornersBoard
             if (!MirrorBroken && _lastWhiteMove is not null && !IsMirror(chain))
                 MirrorBroken = true;
         }
+    }
+
+    /// <summary>
+    /// Проверка наличия доступных ходов, без формирования их полного списка
+    /// </summary>
+    public bool HasAnyMoves(int player)
+    {
+        for (int row = 0; row < BOARD_SIZE; row++)
+        {
+            for (int col = 0; col < BOARD_SIZE; col++)
+            {
+                if (!IsPlayersPiece(Grid[row, col], player))
+                    continue;
+
+                foreach ((int dr, int dc) in DIRECTIONS)
+                {
+                    int nr = row + dr;
+                    int nc = col + dc;
+
+                    // простой ход
+                    if (InBounds(nr, nc) && Grid[nr, nc] == EMPTY && IsAllowed(player, row, col, nr, nc))
+                        return true;
+
+                    int overRow = row + dr;
+                    int overCol = col + dc;
+                    int landRow = row + 2 * dr;
+                    int landCol = col + 2 * dc;
+
+                    // прыжок
+                    if (InBounds(overRow, overCol) &&
+                        InBounds(landRow, landCol) &&
+                        Grid[overRow, overCol] != EMPTY &&
+                        Grid[landRow, landCol] == EMPTY &&
+                        IsAllowed(player, row, col, landRow, landCol))
+                            return true;
+                }
+            }
+        }
+        return false;
     }
 
     /// <summary>
@@ -565,20 +608,21 @@ public sealed class CornersBoard
     }
 
     /// <summary>
-    /// Сохраняет в словарь не более одной цепочки для каждой конечной клетки.
+    /// Сохраняет в массив не более одной цепочки для каждой конечной клетки.
     /// Если уже есть цепочка, ведущая в ту же клетку, оставляем более короткую (незачем хранить длинные).
-    /// Для уголков, в отличие от шашек, неважно, какими конкретно прыжками фишка попала в конечную позицию.
+    /// Для уголков неважно, какими конкретно прыжками фишка попала в конечную позицию
     /// </summary>
-    private static void SaveChain(Dictionary<Square, MoveChain> map, MoveChain chain)
+    private static void SaveChain(MoveChain?[] map, MoveChain chain)
     {
         if (chain.Steps.Count == 0)
             return;
 
         MoveStep last = chain.Steps[^1];
-        Square landing = new Square(last.R2, last.C2);
+        int landingIndex = last.R2 * BOARD_SIZE + last.C2;
+        MoveChain? existing = map[landingIndex];
 
-        if (!map.TryGetValue(landing, out MoveChain? existing) || chain.Steps.Count < existing.Steps.Count)
-            map[landing] = chain;
+        if (existing is null || chain.Steps.Count < existing.Steps.Count)
+            map[landingIndex] = chain;
     }
 
     /// <summary>
@@ -657,8 +701,6 @@ public sealed class CornersBoard
     /// </summary>
     public double Evaluate(int rootPlayer, int sideToMove, List<MoveChain>? generatedMoves = null, double M = 1_000_000)
     {
-        generatedMoves ??= AllMoves(sideToMove);
-
         if (IsTerminal())
         {
             int? winner = GetWinner();
@@ -670,7 +712,8 @@ public sealed class CornersBoard
         }
 
         // Если некуда ходить - проигрыш (вряд ли понадобится)
-        if (generatedMoves.Count == 0)
+        bool hasMoves = generatedMoves is not null ? generatedMoves.Count > 0 : HasAnyMoves(sideToMove);
+        if (!hasMoves)
             return sideToMove == rootPlayer ? -M : +M;
 
         int opponent = Opponent(rootPlayer);
@@ -830,5 +873,26 @@ public sealed class CornersBoard
         BLACK => 'B',
         _ => '?'
     };
+
+    /// <summary>
+    /// Битовая маска с одним установленным битом, соответствующим заданной клетке доски
+    /// </summary>
+    public static ulong SquareBit(int row, int col) => 1UL << (row * BOARD_SIZE + col);
+
+    /// <summary>
+    /// Восстановить маску посещённых клеток по участку цепочки path со стартовой клеткой (row, col)
+    /// </summary>
+    private static ulong BuildVisitedMask(int row, int col, List<MoveStep> path)
+    {
+        if (path.Count == 0)
+            return SquareBit(row, col);
+
+        ulong mask = SquareBit(path[0].R1, path[0].C1);
+
+        foreach (MoveStep step in path)
+            mask |= SquareBit(step.R2, step.C2);
+
+        return mask;
+    }
 
 }

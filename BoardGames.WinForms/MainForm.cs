@@ -172,7 +172,8 @@ public partial class MainForm : Form
             _boardView.Refresh();
             lblStatus.Refresh(); // обновляем цвет надписи
 
-            await MaybeCompleteHumanVsHumanTurnAsync();
+            await MaybeCompleteCheckersCaptureCleanupAsync(); // задержка после цепочки взятий в шашках
+            await MaybeCompleteHumanVsHumanTurnAsync(); // задержка перед передачей хода в режиме без ИИ в шашках
             await MaybeRunAiLoopAsync();
         };
     }
@@ -283,6 +284,8 @@ public partial class MainForm : Form
                     firstAiStep = false;
                 }
 
+                await MaybeCompleteCheckersCaptureCleanupAsync(); // если нужно, пауза в конце цепочки шашечных взятий
+
                 // Если после этого ИИ должен ходить ещё раз подряд, сделать паузу между полными ходами
                 if (_controller.IsAiTurn && !_controller.IsGameOver)
                     await Task.Delay(350);
@@ -312,9 +315,29 @@ public partial class MainForm : Form
         if (!checkers.HumanVsHuman || !checkers.PendingHumanVsHumanTurn)
             return;
 
-        await Task.Delay(500);
+        await Task.Delay(350);
 
         checkers.CompleteHumanVsHumanTurn();
+
+        RefreshUiState();
+        _boardView.Refresh();
+        lblStatus.Refresh();
+    }
+
+    /// <summary>
+    /// Если нужно, сделать задержку в конце цепочки взятий в шашках (когда все взятые фигуры показаны перечёркнутыми)
+    /// </summary>
+    private async Task MaybeCompleteCheckersCaptureCleanupAsync()
+    {
+        if (_controller is not CheckersController checkers)
+            return;
+
+        if (!checkers.PendingCapturedPiecesCleanup)
+            return;
+
+        await Task.Delay(500);
+
+        checkers.CompleteCapturedPiecesCleanup();
 
         RefreshUiState();
         _boardView.Refresh();
@@ -368,7 +391,7 @@ public partial class MainForm : Form
                 "Игра в шашки, реверси и уголки с ИИ\n\n" +
                 "Игра в шашки ведётся по правилам русских шашек: с обязательными взятиями и летающими дамками. " +
                 "Побитые фигуры удаляются с доски только после окончания хода и дамка не может перепрыгнуть одну и ту же " +
-                "фигуру дважды за один ход. После 15 ходов только дамками без взятий объявляется ничья.\n\n" +
+                "фигуру дважды за один ход. После 15 пар ходов только дамками без взятий объявляется ничья.\n\n" +
                 "В реверси, если у игрока нет доступных ходов, он пропускает ход.\n\n"+
                 "В уголках вы должны освободить свой дом за свои первые 40 ходов, а после 80 пар ходов игра завершится. " +
                 "Если белые уже провели свои фишки в дом соперника, чёрным даётся один дополнительный ход, " +

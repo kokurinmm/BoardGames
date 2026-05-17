@@ -33,7 +33,7 @@ public sealed class CheckersBoard
     /// </summary>
     public int QuietMoves { get; private set; }
 
-    public const int DRAW_NUM = 15; // количество тихих дамочных ходов для объявления ничьи
+    public const int DRAW_NUM = 30; // количество тихих дамочных (полу)ходов для объявления ничьи
 
     public CheckersBoard()
     {
@@ -141,28 +141,34 @@ public sealed class CheckersBoard
     /// </summary>
     public List<MoveChain> AllMoves(int player, bool deduplicate)
     {
-        List<MoveChain> allJumps = new(); // цепочки взятий
+        List<MoveChain> captures = CaptureMoves(player, deduplicate); // цепочки взятий
+
+        if (captures.Count > 0)
+            return captures;
+
         List<MoveChain> allSlides = new(); // простые ходы
 
         for (int row = 0; row < BOARD_SIZE; row++)
             for (int col = 0; col < BOARD_SIZE; col++)
-            {
-                int piece = Grid[row, col];
-                if (!IsPlayersPiece(piece, player))
-                    continue;
-
-                List<MoveChain> jumps = JumpSequencesFrom(row, col, deduplicate);
-                if (jumps.Count > 0)
-                {
-                    allJumps.AddRange(jumps);
-                }
-                else if (allJumps.Count == 0)
-                {
+                if (IsPlayersPiece(Grid[row, col], player))
                     allSlides.AddRange(SlidesFrom(row, col));
-                }
-            }
 
-        return allJumps.Count > 0 ? allJumps : allSlides;
+        return allSlides;
+    }
+
+    /// <summary>
+    /// Получить все цепочки взятий игрока player
+    /// </summary>
+    public List<MoveChain> CaptureMoves(int player, bool deduplicate)
+    {
+        List<MoveChain> allJumps = new();
+
+        for (int row = 0; row < BOARD_SIZE; row++)
+            for (int col = 0; col < BOARD_SIZE; col++)
+                if (IsPlayersPiece(Grid[row, col], player))
+                    allJumps.AddRange(JumpSequencesFrom(row, col, deduplicate));
+
+        return allJumps;
     }
 
     /// <summary>
@@ -432,18 +438,139 @@ public sealed class CheckersBoard
     }
 
     /// <summary>
+    /// Проверка наличия доступных ходов, без формирования их полного списка
+    /// </summary>
+    public bool HasAnyMoves(int player)
+    {
+        for (int row = 0; row < BOARD_SIZE; row++)
+        {
+            for (int col = 0; col < BOARD_SIZE; col++)
+            {
+                int piece = Grid[row, col];
+
+                if (!IsPlayersPiece(piece, player))
+                    continue;
+
+                if (HasAnyJumpFrom(row, col)) // есть ли взятия
+                    return true;
+
+                if (HasAnySlideFrom(row, col)) // есть ли простые ходы
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool HasAnySlideFrom(int row, int col) // аналогична SlidesFrom, только без построения списка ходов
+    {
+        int piece = Grid[row, col];
+        if (piece == EMPTY)
+            return false;
+
+        bool isKing = IsKing(piece);
+        int moveDir = piece > 0 ? -1 : 1;
+        (int dr, int dc)[] directions = { (-1, -1), (-1, 1), (1, -1), (1, 1) };
+
+        foreach ((int dr, int dc) in directions)
+        {
+            if (!isKing && dr != moveDir)
+                continue;
+
+            int nr = row + dr;
+            int nc = col + dc;
+
+            if (InBounds(nr, nc) && Grid[nr, nc] == EMPTY)
+                return true;
+        }
+
+        return false;
+    }
+
+    private bool HasAnyJumpFrom(int row, int col) // аналогична CollectJumpSequences, только без построения списка цепочек
+    {
+        int piece = Grid[row, col];
+        if (piece == EMPTY)
+            return false;
+
+        int player = PieceColor(piece);
+        int opponent = Opponent(player);
+
+        (int dr, int dc)[] directions = { (-1, -1), (-1, 1), (1, -1), (1, 1) };
+
+        if (IsKing(piece))
+        {
+            foreach ((int dr, int dc) in directions)
+            {
+                bool seenOpponent = false;
+
+                for (int dist = 1; dist < BOARD_SIZE; dist++)
+                {
+                    int nr = row + dr * dist;
+                    int nc = col + dc * dist;
+
+                    if (!InBounds(nr, nc))
+                        break;
+
+                    int cell = Grid[nr, nc];
+
+                    if (cell == EMPTY)
+                    {
+                        if (seenOpponent)
+                            return true;
+
+                        continue;
+                    }
+
+                    if (IsPlayersPiece(cell, player))
+                        break;
+
+                    if (IsPlayersPiece(cell, opponent))
+                    {
+                        if (seenOpponent)
+                            break;
+
+                        seenOpponent = true;
+                        continue;
+                    }
+
+                    break;
+                }
+            }
+
+            return false;
+        }
+
+        foreach ((int dr, int dc) in directions)
+        {
+            int nr = row + dr;
+            int nc = col + dc;
+            int jr = row + 2 * dr;
+            int jc = col + 2 * dc;
+
+            if (!InBounds(nr, nc) || !InBounds(jr, jc))
+                continue;
+
+            if (IsPlayersPiece(Grid[nr, nc], opponent) && Grid[jr, jc] == EMPTY)
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Простая функция оценки позиции с точки зрения игрока rootPlayer,
     /// если очередь хода принадлежит стороне sideToMove, с учётом продвижения шашек и мобильности
     /// </summary>
     public double Evaluate(int rootPlayer, int sideToMove, List<MoveChain>? moves = null, double M = 1_000_000)
     {
-        moves ??= AllMoves(sideToMove, deduplicate: false);
-
-        if (moves.Count == 0)
-            return sideToMove == rootPlayer ? -M : +M; // проигрыш, если некуда ходить
-
         if (QuietMoves >= DRAW_NUM)
             return 0.0; // ничья по правилу 15 ходов
+
+        bool hasMoves = moves is not null ? moves.Count > 0 : HasAnyMoves(sideToMove);
+
+        if (!hasMoves)
+            return sideToMove == rootPlayer ? -M : +M; // проигрыш, если некуда ходить
 
         double materialScore = 0.0;
         double advancementScore = 0.0;

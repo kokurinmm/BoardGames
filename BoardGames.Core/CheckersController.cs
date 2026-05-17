@@ -23,7 +23,7 @@ public sealed class CheckersController : IGameController
     public int AlphaBetaDepth { get; set; } = 4;
     public int MaxDepth { get; set; } = 12;
     public int MonteCarloSimulations { get; set; } = 60;
-    public int MctsTimeLimitMs { get; set; } = 750;
+    public int MctsTimeLimitMs { get; set; } = 300;
 
     public bool IsGameOver { get; private set; }
 
@@ -81,6 +81,11 @@ public sealed class CheckersController : IGameController
     /// </summary>
     private readonly HashSet<CheckersBoard.Square> _capturedButNotRemoved = new();
 
+    /// <summary>
+    /// Задержка в конце цепочки взятий, чтобы успели нарисоваться перечёркнутыми все взятые фигуры
+    /// </summary>
+    public bool PendingCapturedPiecesCleanup { get; private set; }
+
     private CheckersBoard.MoveChain? _pendingAiMove; // текущий ход или цепочка ходов ИИ, для анимации
     private int _pendingAiStepIndex; // текущий шаг в цепочке ходов ИИ, для анимации
 
@@ -130,6 +135,7 @@ public sealed class CheckersController : IGameController
         _mcts.Reset(); // перезапуск сеанса MCTS
 
         PendingHumanVsHumanTurn = false;
+        PendingCapturedPiecesCleanup = false;
     }
 
     public void Draw(IBoardCanvas canvas, BoardRect rect) // Отрисовка доски
@@ -213,6 +219,9 @@ public sealed class CheckersController : IGameController
         if (HumanVsHuman && PendingHumanVsHumanTurn)
             return; // идёт задержка между двумя ходами в игре без ИИ, щелчки не обрабатываем
 
+        if (PendingCapturedPiecesCleanup)
+            return; // задержка в конце цепочки взятий
+
         if (!HumanVsHuman && _turn != _humanColor)
             return;
 
@@ -251,6 +260,7 @@ public sealed class CheckersController : IGameController
 
         if (step.Captured.HasValue) // если это взятие
         {
+            _board.UpdateQuietCount(step, movingPiece); // обнулить счётчик тихих ходов
             _currentHumanMoveSteps.Add(step);
             if (step.Captured is CheckersBoard.Square captured)
                 _capturedButNotRemoved.Add(captured); // надо отметить побитую фигуру
@@ -268,8 +278,13 @@ public sealed class CheckersController : IGameController
                 return;
             }
 
-            _board.RemoveCapturedPieces(_currentHumanMoveSteps); // если продолжений нет, убираем побитые фигуры с доски
-
+            // Если продолжений нет, оставляем побитые фигуры перечёркнутыми на доске.
+            // Графический интерфейс сделает задержку и затем вызовет CompleteCapturedPiecesCleanup()
+            _selectedPiece = null;
+            _possibleMoves.Clear();
+            _mustContinueJump = false;
+            PendingCapturedPiecesCleanup = true;
+            return;
         }
     
         _board.UpdateQuietCount(step, movingPiece);
@@ -337,10 +352,51 @@ public sealed class CheckersController : IGameController
         if (_pendingAiStepIndex >= _pendingAiMove.Steps.Count)
         {
             CheckersBoard.MoveStep last = _pendingAiMove.Steps[^1];
-            _lastAiSquare = (last.R2, last.C2);
 
-            _board.RemoveCapturedPieces(_pendingAiMove);
-            _capturedButNotRemoved.Clear();
+            if (last.Captured.HasValue)
+            {
+                // Последняя побитая фигура уже добавлена в _capturedButNotRemoved и будет показана перечёркнутой.
+                // После задержки графический интерфейс вызовет CompleteCapturedPiecesCleanup()
+                PendingCapturedPiecesCleanup = true;
+            }
+            else
+            {
+                // ставим рамочку вокруг клетки, куда сходил ИИ; для взятий это будет сделано после задержки
+                _lastAiSquare = (last.R2, last.C2);
+
+                _pendingAiMove = null;
+                _pendingAiStepIndex = 0;
+
+                _turn = CheckersBoard.Opponent(_turn);
+                CheckGameOver();
+                if (!IsGameOver)
+                    _halfMovesPlayed++; // обновляем счётчик ходов
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// После задержки удалить взятые фигуры с доски
+    /// </summary>
+    public void CompleteCapturedPiecesCleanup()
+    {
+        if (!PendingCapturedPiecesCleanup)
+            return;
+
+        PendingCapturedPiecesCleanup = false;
+
+        // Завершение анимированного хода ИИ
+        if (_pendingAiMove is not null)
+        {
+            if (_pendingAiMove.Steps.Count > 0)
+            {
+                CheckersBoard.MoveStep last = _pendingAiMove.Steps[^1];
+                _lastAiSquare = (last.R2, last.C2);
+                _board.RemoveCapturedPieces(_pendingAiMove);
+                _capturedButNotRemoved.Clear();
+            }
 
             _pendingAiMove = null;
             _pendingAiStepIndex = 0;
@@ -348,10 +404,40 @@ public sealed class CheckersController : IGameController
             _turn = CheckersBoard.Opponent(_turn);
             CheckGameOver();
             if (!IsGameOver)
-                _halfMovesPlayed++; // обновляем счётчик ходов
+                _halfMovesPlayed++;
+
+            return;
         }
 
-        return true;
+        // Завершение пользовательской цепочки взятий
+        if (_currentHumanMoveSteps.Count > 0)
+        {
+            CheckersBoard.MoveStep last = _currentHumanMoveSteps[^1];
+
+            _board.RemoveCapturedPieces(_currentHumanMoveSteps);
+            _capturedButNotRemoved.Clear();
+
+            _selectedPiece = null;
+            _possibleMoves.Clear();
+            _mustContinueJump = false;
+            _currentHumanMoveSteps.Clear();
+
+            if (HumanVsHuman)
+            {
+                _lastAiSquare = (last.R2, last.C2);
+                PendingHumanVsHumanTurn = true;
+                return;
+            }
+
+            _turn = CheckersBoard.Opponent(_turn);
+            CheckGameOver();
+            if (!IsGameOver)
+                _halfMovesPlayed++;
+
+            return;
+        }
+
+        _capturedButNotRemoved.Clear();
     }
 
     /// <summary>
@@ -393,8 +479,7 @@ public sealed class CheckersController : IGameController
         if (IsGameOver || _turn != _aiColor)
             return null;
 
-        List<CheckersBoard.MoveChain> legalMoves = _board.AllMoves(_turn, deduplicate: true);
-        if (legalMoves.Count == 0)
+        if (!_board.HasAnyMoves(_turn))
         {
             CheckGameOver();
             return null;
@@ -422,13 +507,12 @@ public sealed class CheckersController : IGameController
                 alpha: double.NegativeInfinity,
                 beta: double.PositiveInfinity,
                 maximizingPlayer: true,
-                forcingMoves: (pos, side, moves) => // вынужденные взятия просчитывать до конца, на всю глубину
+                forcingMoves: (pos, side) => // вынужденные взятия просчитывать до конца, на всю глубину
                 {
-                    if (moves.Count == 0)
+                    List<CheckersBoard.MoveChain> captures = pos.CaptureMoves(side, deduplicate: true);
+                    if (captures.Count == 0)
                         return null;
-
-                    CheckersBoard.MoveStep first = moves[0].Steps[0];
-                    return first.Captured.HasValue ? moves : null;
+                    return captures.OrderByDescending(ch => ch.Length).ToList();
                 });
         }
         else if (Mode == AiMode.MonteCarlo)
@@ -464,15 +548,16 @@ public sealed class CheckersController : IGameController
 
         while (true)
         {
+            if (simulation.QuietMoves >= CheckersBoard.DRAW_NUM)
+                return 0.5; // ничья
+
             List<CheckersBoard.MoveChain> moves = simulation.AllMoves(side, deduplicate: true);
+
             if (moves.Count == 0)
             {
                 int winner = CheckersBoard.Opponent(side);
                 return winner == player ? 1.0 : 0.0;
             }
-
-            if (simulation.QuietMoves >= CheckersBoard.DRAW_NUM)
-                return 0.5;
 
             CheckersBoard.MoveChain randomMove = moves[rng.Next(moves.Count)];
             simulation.ApplyChain(randomMove);
@@ -489,16 +574,15 @@ public sealed class CheckersController : IGameController
         if (IsGameOver)
             return;
 
-        List<CheckersBoard.MoveChain> moves = _board.AllMoves(_turn, deduplicate: false);
-        if (moves.Count > 0)
+        if (_board.QuietMoves >= CheckersBoard.DRAW_NUM) // если слишком много ходов только дамками без взятий, ничья
         {
-            if (_board.QuietMoves >= CheckersBoard.DRAW_NUM) // если слишком много ходов только дамками без взятий, ничья
-            {
-                IsGameOver = true;
-                GameOverMessage = "Ничья";
-            }
+            IsGameOver = true;
+            GameOverMessage = "Ничья";
             return;
         }
+
+        if (_board.HasAnyMoves(_turn))
+            return;
 
         IsGameOver = true;
 

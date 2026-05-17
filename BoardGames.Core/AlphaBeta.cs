@@ -27,50 +27,68 @@ public static class AlphaBeta
         double alpha,
         double beta,
         bool maximizingPlayer, // если True, то текущий ход принадлежит root_player
-        Func<TPos, int, List<TMove>, List<TMove>?>? forcingMoves = null) // вынужденные ходы (проверяются до конца) или null
+        Func<TPos, int, List<TMove>?>? forcingMoves = null) // вынужденные ходы (проверяются до конца) или null
         where TMove : class
     {
         int sideToMove = maximizingPlayer ? rootPlayer : opponent(rootPlayer);
-        List<TMove> moves = legalMoves(position, sideToMove);
 
-        if (isTerminal(position, sideToMove) || (!canPass && moves.Count == 0))
+        // Сначала делаем то, что можно сделать без составления полного списка доступных ходов
+
+        if (isTerminal(position, sideToMove)) // если позиция финальная
         {
-            double score = evaluate(position, rootPlayer, sideToMove, moves);
+            double score = evaluate(position, rootPlayer, sideToMove, null);
             if (score > 0)
                 score += depth; // если выигрыш, то лучше поскорее
-            else if (score<0)
+            else if (score < 0)
                 score -= depth; // если поражение, то лучше не сразу
             return (score, null);
         }
 
-        if (depth == 0)
+        List<TMove> moves;
+
+        if (depth == 0) // если находимся на максимальной глубине
         {
-            List<TMove>? forcings = forcingMoves?.Invoke(position, sideToMove, moves);
+            List<TMove>? forcings = forcingMoves?.Invoke(position, sideToMove);
 
             if (forcings is null || forcings.Count == 0) // если нет вынужденных ходов (взятий), обязательных для проверки
-                return (evaluate(position, rootPlayer, sideToMove, moves), null); // то оцениваем позицию
+                return (evaluate(position, rootPlayer, sideToMove, null), null); // то оцениваем позицию
 
             moves = forcings; // если же вынужденные ходы есть, продолжаем углубляться, пока они не закончатся
         }
-
-        if (moves.Count == 0 && canPass)
+        else
         {
-            var (scoreAfterPass, _) = Search(
-                position,
-                legalMoves,
-                applyMoveToCopy,
-                evaluate,
-                opponent,
-                isTerminal,
-                canPass,
-                rootPlayer,
-                depth > 0 ? depth - 1 : 0, // depth=0 при просчёте вынужденных ходов, оставляем 0, иначе уменьшаем на 1
-                alpha,
-                beta,
-                !maximizingPlayer,
-                forcingMoves);
+            // Теперь составляем список ходов
+            moves = legalMoves(position, sideToMove);
 
-            return (scoreAfterPass, null);
+            if (moves.Count == 0)
+            {
+                if (canPass) // доступных ходов нет, но возможен пас - считается как отдельный ход
+                {
+                    var (scoreAfterPass, _) = Search(
+                        position,
+                        legalMoves,
+                        applyMoveToCopy,
+                        evaluate,
+                        opponent,
+                        isTerminal,
+                        canPass,
+                        rootPlayer,
+                        depth - 1,
+                        alpha,
+                        beta,
+                        !maximizingPlayer,
+                        forcingMoves);
+
+                    return (scoreAfterPass, null);
+                }
+                // Доступных ходов нет, игра закончена - делаем то же, что и выше при IsTerminal
+                double score = evaluate(position, rootPlayer, sideToMove, moves);
+                if (score > 0)
+                    score += depth; // если выигрыш, то лучше поскорее
+                else if (score < 0)
+                    score -= depth; // если поражение, то лучше не сразу
+                return (score, null);
+            }
         }
 
         TMove? bestMove = null;
@@ -92,7 +110,7 @@ public static class AlphaBeta
                     isTerminal,
                     canPass,
                     rootPlayer,
-                    depth > 0 ? depth - 1 : 0,
+                    depth > 0 ? depth - 1 : 0, // depth=0 при просчёте вынужденных ходов, оставляем 0, иначе уменьшаем на 1
                     alpha,
                     beta,
                     false,

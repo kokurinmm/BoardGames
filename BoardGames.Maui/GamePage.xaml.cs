@@ -74,11 +74,10 @@ public partial class GamePage : ContentPage
         _controller.HandleCellClick(cell.Value.row, cell.Value.col); // главная часть обработки здесь
 
         RefreshUiState();
-
         BoardGraphicsView.Invalidate(); // надо перерисовать доску
 
-        await MaybeCompleteHumanVsHumanTurnAsync();
-
+        await MaybeCompleteCheckersCaptureCleanupAsync(); // задержка после цепочки взятий в шашках
+        await MaybeCompleteHumanVsHumanTurnAsync(); // задержка перед передачей хода в режиме без ИИ в шашках
         await MaybeRunAiLoopAsync();
     }
 
@@ -146,6 +145,8 @@ public partial class GamePage : ContentPage
                     firstAiStep = false;
                 }
 
+                await MaybeCompleteCheckersCaptureCleanupAsync(); // если нужно, пауза в конце цепочки шашечных взятий
+
                 // Если после этого ИИ должен ходить ещё раз подряд, сделать паузу между полными ходами
                 if (_controller.IsAiTurn && !_controller.IsGameOver)
                     await Task.Delay(350);
@@ -159,6 +160,25 @@ public partial class GamePage : ContentPage
             _aiLoopRunning = false;
             RefreshUiState();
         }
+    }
+
+    /// <summary>
+    /// Если нужно, сделать задержку в конце цепочки взятий в шашках (когда все взятые фигуры показаны перечёркнутыми)
+    /// </summary>
+    private async Task MaybeCompleteCheckersCaptureCleanupAsync()
+    {
+        if (_controller is not CheckersController checkers)
+            return;
+
+        if (!checkers.PendingCapturedPiecesCleanup)
+            return;
+
+        await Task.Delay(350);
+
+        checkers.CompleteCapturedPiecesCleanup();
+
+        RefreshUiState();
+        BoardGraphicsView.Invalidate();
     }
 
     /// <summary>
@@ -189,10 +209,16 @@ public partial class GamePage : ContentPage
         if (_controller is null)
             return;
 
-        Title =
-            $"{_controller.GameDisplayName} — " +
-            $"{_controller.WhitePieceCount} : {_controller.BlackPieceCount} — " +
-            $"ход {_controller.CurrentFullMoveNumber}";
+        if(_options is not null && _options.Kind == GameKind.Reversi)
+            Title =
+                $"{_controller.GameDisplayName} — " +
+                $"{_controller.BlackPieceCount} : {_controller.WhitePieceCount} — " +
+                $"ход {_controller.CurrentFullMoveNumber}";
+        else
+            Title =
+                $"{_controller.GameDisplayName} — " +
+                $"{_controller.WhitePieceCount} : {_controller.BlackPieceCount} — " +
+                $"ход {_controller.CurrentFullMoveNumber}";
 
         if (_controller.IsGameOver)
         {

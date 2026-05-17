@@ -133,50 +133,44 @@ public sealed class ReversiBoard
     }
 
     /// <summary>
-    /// Определить, какие фишки будут перевёрнуты, если игрок player сходит в клетку (row, col)
+    /// Применить ход игрока player в клетку (row, col)
     /// </summary>
-    private List<(int x, int y)> FlipsForMove(int row, int col, int player)
+    public void ApplyMove(int row, int col, int player)
     {
-        List<(int x, int y)> flips = new();
-
         if (Grid[row, col] != EMPTY)
-            return flips;
+            return;
 
         int opponent = Opponent(player);
+
+        Grid[row, col] = player;
 
         foreach ((int dx, int dy) in DIRECTIONS)
         {
             int nr = row + dx;
             int nc = col + dy;
-            List<(int x, int y)> temp = new();
+            int count = 0;
 
             while (InBounds(nr, nc) && Grid[nr, nc] == opponent)
             {
-                temp.Add((nr, nc));
+                count++;
                 nr += dx;
                 nc += dy;
             }
 
-            if (InBounds(nr, nc) && Grid[nr, nc] == player && temp.Count > 0)
-                flips.AddRange(temp);
-        }
+            if (count == 0)
+                continue;
 
-        return flips;
+            if (!InBounds(nr, nc) || Grid[nr, nc] != player)
+                continue;
+
+            for (int k = 1; k <= count; k++)
+                Grid[row + dx * k, col + dy * k] = player;
+        }
     }
 
     /// <summary>
-    /// Применить ход игрока player в клетку (row, col)
+    /// Проверка наличия доступных ходов, без формирования их полного списка
     /// </summary>
-    public void ApplyMove(int row, int col, int player)
-    {
-        List<(int x, int y)> flips = FlipsForMove(row, col, player);
-        Grid[row, col] = player;
-
-        foreach ((int fx, int fy) in flips)
-            Grid[fx, fy] = player;
-    }
-
-    // Есть ли у игрока доступные ходы
     public bool HasAnyMoves(int player)
     {
         for (int row = 0; row < BOARD_SIZE; row++)
@@ -185,6 +179,21 @@ public sealed class ReversiBoard
                     return true;
         return false;
 
+    }
+
+    /// <summary>
+    /// Сколько у игрока доступных ходов (без формирования списка)
+    /// </summary>
+    public int LegalMoveCount(int player)
+    {
+        int count = 0;
+
+        for (int row = 0; row < BOARD_SIZE; row++)
+            for (int col = 0; col < BOARD_SIZE; col++)
+                if (IsLegalMove(row, col, player))
+                    count++;
+
+        return count;
     }
 
     // Проверка окончания игры (когда ни у одного из игроков нет доступных ходов)
@@ -240,7 +249,7 @@ public sealed class ReversiBoard
                     positionalScore -= POSITIONAL_MATRIX[row, col];
             }
 
-        double mobilityScore = LegalMoves(player).Count - LegalMoves(opponent).Count;
+        double mobilityScore = LegalMoveCount(player) - LegalMoveCount(opponent);
 
         double total =
             W_POS[phase] * positionalScore +

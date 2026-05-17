@@ -25,7 +25,7 @@ public sealed class ReversiController : IGameController
     public int AlphaBetaDepth { get; set; } = 4;
     public int MaxDepth { get; set; } = 9;
     public int MonteCarloSimulations { get; set; } = 60;
-    public int MctsTimeLimitMs { get; set; } = 750;
+    public int MctsTimeLimitMs { get; set; } = 300;
 
     public bool IsGameOver { get; private set; }
 

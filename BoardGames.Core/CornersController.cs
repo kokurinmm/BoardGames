@@ -32,7 +32,7 @@ public sealed class CornersController : IGameController
     public int AlphaBetaDepth { get; set; } = 4;
     public int MaxDepth { get; set; } = 6;
     public int MonteCarloSimulations { get; set; } = 60;
-    public int MctsTimeLimitMs { get; set; } = 750;
+    public int MctsTimeLimitMs { get; set; } = 300;
 
     public bool IsGameOver { get; private set; }
 
@@ -74,7 +74,7 @@ public sealed class CornersController : IGameController
 
     private (int Row, int Col)? _currentMoveOrigin; // исходная клетка текущего полного хода
 
-    private readonly HashSet<CornersBoard.Square> _visitedSquares = new(); // множество уже посещённых клеток в текущем ходе
+    private ulong _visitedMask; // битовая маска уже посещённых клеток в текущем ходе
 
     private CornersBoard.MoveChain? _pendingAiMove; // текущий ход ИИ, для анимации
     private int _pendingAiStepIndex; // текущий шаг в ходе ИИ, для анимации
@@ -297,7 +297,7 @@ public sealed class CornersController : IGameController
                     startRow,
                     startCol,
                     currentSequence: null,
-                    visitedSquares: _visitedSquares);
+                    visitedMask: _visitedMask);
 
             if (continuations.Count > 0)
             {
@@ -366,7 +366,7 @@ public sealed class CornersController : IGameController
 
     /// <summary>
     /// Инициализирует полный ход _executedTurn, запоминает стартовую клетку _currentMoveOrigin,
-    /// поддерживает множество посещённых клеток _visitedSquares
+    /// поддерживает битовую маску посещённых клеток _visitedMask
     /// </summary>
     private void AppendExecutedStep(CornersBoard.MoveStep step)
     {
@@ -375,22 +375,21 @@ public sealed class CornersController : IGameController
         if (_executedTurn.Steps.Count == 0)
         {
             _currentMoveOrigin = (step.R1, step.C1);
-            _visitedSquares.Clear();
-            _visitedSquares.Add(new CornersBoard.Square(step.R1, step.C1));
+            _visitedMask = CornersBoard.SquareBit(step.R1, step.C1);
         }
 
         _executedTurn.Steps.Add(step);
-        _visitedSquares.Add(new CornersBoard.Square(step.R2, step.C2));
+        _visitedMask |= CornersBoard.SquareBit(step.R2, step.C2);
     }
 
     /// <summary>
-    /// Очистка описания полного хода _executedTurn , _currentMoveOrigin , _visitedSquares 
+    /// Очистка описания полного хода _executedTurn , _currentMoveOrigin , _visitedMask 
     /// </summary>
     private void ResetExecutedTurn()
     {
         _executedTurn = null;
         _currentMoveOrigin = null;
-        _visitedSquares.Clear();
+        _visitedMask = 0UL;
     }
 
     public bool MakeAiTurn() // не используется, но может пригодиться для игр ИИ друг с другом
@@ -602,7 +601,7 @@ public sealed class CornersController : IGameController
             return true;
         }
 
-        if (_board.AllMoves(CornersBoard.Opponent(movedPlayer)).Count == 0)
+        if (!_board.HasAnyMoves(CornersBoard.Opponent(movedPlayer)))
         {
             IsGameOver = true;
             SetWinnerMessage(movedPlayer);
