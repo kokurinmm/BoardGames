@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 
 namespace BoardGames;
@@ -52,15 +51,14 @@ public sealed class ReversiController : IGameController
     private ReversiBoard.Move? _pendingAiMove; // текущий ход ИИ
     private bool _hasPendingAiMove; // выполнен ли уже найденный ход
 
-    private readonly MctsSession<ReversiBoard, MoveRef> _mcts; // сеанс MCTS
+    private readonly MctsSession<ReversiBoard, ReversiBoard.Move> _mcts; // сеанс MCTS
 
     public bool IsAiTurn => !HumanVsHuman && !IsGameOver && _turn == _aiColor;
 
     public ReversiController()
     {
-        _mcts = new MctsSession<ReversiBoard, MoveRef>(
-            // Здесь преобразование ходов в тип MoveRef
-            legalMoves: (pos, side) => pos.LegalMoves(side).Select(m => new MoveRef(m.X, m.Y)).ToList(),
+        _mcts = new MctsSession<ReversiBoard, ReversiBoard.Move>(
+            legalMoves: (pos, side) => pos.LegalMoves(side),
             applyMoveToCopy: (pos, move, side) =>
             {
                 ReversiBoard child = pos.Copy();
@@ -228,11 +226,9 @@ public sealed class ReversiController : IGameController
 
         if (Mode == AiMode.AlphaBeta)
         {
-            (double score, MoveRef? moveRef) = AlphaBeta.Search(
+            (double score, bestMove) = AlphaBeta.Search(
                 position: _board,
-                legalMoves: (pos, side) => pos.LegalMoves(side) // преобразование ходов в тип MoveRef
-                    .Select(m => new MoveRef(m.X, m.Y))
-                    .ToList(),
+                legalMoves: (pos, side) => pos.LegalMoves(side),
                 applyMoveToCopy: (pos, move, side) =>
                 {
                     ReversiBoard child = pos.Copy();
@@ -248,37 +244,9 @@ public sealed class ReversiController : IGameController
                 alpha: double.NegativeInfinity,
                 beta: double.PositiveInfinity,
                 maximizingPlayer: true);
-
-            if (moveRef is not null)
-                bestMove = new ReversiBoard.Move(moveRef.X, moveRef.Y);
-        }
-        else if (Mode == AiMode.MonteCarlo)
-        {
-            MoveRef? bestMoveRef = MonteCarlo.BestMove(
-                position: _board,
-                legalMoves: (pos, side) => pos.LegalMoves(side)
-                    .Select(m => new MoveRef(m.X, m.Y))
-                    .ToList(),
-                applyMoveToCopy: (pos, move) =>
-                {
-                    ReversiBoard child = pos.Copy();
-                    child.ApplyMove(move.X, move.Y, _aiColor);
-                    return child;
-                },
-                playoutScore: (pos, player, rng) =>
-                    ReversiMctsRolloutResult(pos, player, ReversiBoard.Opponent(player), rng),
-                player: _aiColor,
-                simulations: MonteCarloSimulations);
-
-            if (bestMoveRef is not null)
-                bestMove = new ReversiBoard.Move(bestMoveRef.X, bestMoveRef.Y);
         }
         else
-        {
-            MoveRef? bestMoveRef = _mcts.SearchBestMove(_board, _turn, _aiColor, MctsTimeLimitMs);
-            if (bestMoveRef is not null)
-                bestMove = new ReversiBoard.Move(bestMoveRef.X, bestMoveRef.Y);
-        }
+            bestMove = _mcts.SearchBestMove(_board, _turn, _aiColor, MctsTimeLimitMs);
 
         return bestMove;
     }
@@ -454,19 +422,4 @@ public sealed class ReversiController : IGameController
         return moves[rng.Next(moves.Count)];
     }
 
-
-    /// <summary>
-    /// Для AlphaBeta в данной реализации нужен именно класс
-    /// </summary>
-    private sealed class MoveRef
-    {
-        public int X { get; }
-        public int Y { get; }
-
-        public MoveRef(int x, int y)
-        {
-            X = x;
-            Y = y;
-        }
-    }
 }

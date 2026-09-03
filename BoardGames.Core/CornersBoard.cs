@@ -42,7 +42,7 @@ public sealed class CornersBoard
 
     public bool MirrorBroken { get; private set; } // зеркальное поведение чёрных нарушено
 
-    private MoveChain? _lastWhiteMove; // последний ход белых - для проверки зеркального повторения чёрными
+    private AiMove? _lastWhiteMove; // последний ход белых - для проверки зеркального повторения чёрными
 
     /// <summary>
     /// Клетка доски
@@ -72,6 +72,18 @@ public sealed class CornersBoard
         public bool IsJumpChain => Steps.Count > 0 && Steps[0].IsJump;
 
         public MoveChain Clone() => new MoveChain(Steps);
+    }
+
+    /// <summary>
+    /// Компактное представление полного хода для алгоритмов ИИ. 
+    /// Только начальная и конечная клетка, промежуточные неважны
+    /// </summary>
+    public readonly record struct AiMove(byte From, byte To)
+    {
+        public int StartRow => From / BOARD_SIZE;
+        public int StartCol => From % BOARD_SIZE;
+        public int EndRow => To / BOARD_SIZE;
+        public int EndCol => To % BOARD_SIZE;
     }
 
     private static readonly int[,] WhiteKeyPositionMatrix =
@@ -153,7 +165,7 @@ public sealed class CornersBoard
         board.WhiteMovesPlayed = WhiteMovesPlayed;
         board.BlackMovesPlayed = BlackMovesPlayed;
         board.MirrorBroken = MirrorBroken;
-        board._lastWhiteMove = _lastWhiteMove?.Clone();
+        board._lastWhiteMove = _lastWhiteMove;
 
         return board;
     }
@@ -379,6 +391,162 @@ public sealed class CornersBoard
 
     }
 
+
+    /// <summary>
+    /// Найти все допустимые ходы игрока player в компактном виде для алгоритмов ИИ. 
+    /// В отличие от AllMoves, не создаёт списки шагов для каждого результата
+    /// </summary>
+    public List<AiMove> AiMoves(int player)
+    {
+        List<AiMove> moves = new();
+
+        for (int row = 0; row < BOARD_SIZE; row++)
+            for (int col = 0; col < BOARD_SIZE; col++)
+            {
+                if (!IsPlayersPiece(Grid[row, col], player))
+                    continue;
+
+                AddAiSlidesFrom(row, col, player, moves);
+                AddAiJumpsFrom(row, col, player, moves);
+            }
+
+        return moves;
+    }
+
+    private void AddAiSlidesFrom(int row, int col, int player, List<AiMove> moves)
+    {
+        foreach ((int dr, int dc) in DIRECTIONS)
+        {
+            int nr = row + dr;
+            int nc = col + dc;
+
+            if (InBounds(nr, nc) &&
+                Grid[nr, nc] == EMPTY &&
+                IsAllowed(player, row, col, nr, nc))
+            {
+                moves.Add(CreateAiMove(row, col, nr, nc));
+            }
+        }
+    }
+
+    private void AddAiJumpsFrom(int row, int col, int player, List<AiMove> moves)
+    {
+        ulong destinationsMask = 0UL;
+        CollectAiJumpDestinations(
+            row,
+            col,
+            player,
+            row,
+            col,
+            Grid[row, col],
+            SquareBit(row, col),
+            ref destinationsMask,
+            moves);
+    }
+
+    private void CollectAiJumpDestinations(
+        int row,
+        int col,
+        int player,
+        int startRow,
+        int startCol,
+        int piece,
+        ulong visitedMask,
+        ref ulong destinationsMask,
+        List<AiMove> moves)
+    {
+        foreach ((int dr, int dc) in DIRECTIONS)
+        {
+            int overRow = row + dr;
+            int overCol = col + dc;
+            int landRow = row + 2 * dr;
+            int landCol = col + 2 * dc;
+
+            if (!InBounds(overRow, overCol) || !InBounds(landRow, landCol))
+                continue;
+
+            if (Grid[overRow, overCol] == EMPTY || Grid[landRow, landCol] != EMPTY)
+                continue;
+
+            ulong landingBit = SquareBit(landRow, landCol);
+            if ((visitedMask & landingBit) != 0)
+                continue;
+
+            if (!IsAllowed(player, startRow, startCol, landRow, landCol))
+                continue;
+
+            if ((destinationsMask & landingBit) == 0UL)
+            {
+                destinationsMask |= landingBit;
+                moves.Add(CreateAiMove(startRow, startCol, landRow, landCol));
+            }
+
+            Grid[row, col] = EMPTY;
+            Grid[landRow, landCol] = piece;
+
+            CollectAiJumpDestinations(
+                landRow,
+                landCol,
+                player,
+                startRow,
+                startCol,
+                piece,
+                visitedMask | landingBit,
+                ref destinationsMask,
+                moves);
+
+            Grid[landRow, landCol] = EMPTY;
+            Grid[row, col] = piece;
+        }
+    }
+
+    private static AiMove CreateAiMove(int startRow, int startCol, int endRow, int endCol) =>
+        new(
+            (byte)(startRow * BOARD_SIZE + startCol),
+            (byte)(endRow * BOARD_SIZE + endCol));
+
+    /// <summary>
+    /// Применить компактный ход ИИ к позиции
+    /// </summary>
+    public void ApplyAiMove(AiMove move, int player)
+    {
+        int piece = Grid[move.StartRow, move.StartCol];
+        Grid[move.StartRow, move.StartCol] = EMPTY;
+        Grid[move.EndRow, move.EndCol] = piece;
+        UpdateAfterFullMove(move, player);
+    }
+
+    /// <summary>
+    /// Восстановить одну полную цепочку шагов для выбранного алгоритмом ИИ компактного хода
+    /// </summary>
+    public MoveChain? ExpandAiMove(AiMove move, int player)
+    {
+        if (ManhattanDistance(move.StartRow, move.StartCol, move.EndRow, move.EndCol) == 1)
+        {
+            if (Grid[move.StartRow, move.StartCol] == player &&
+                Grid[move.EndRow, move.EndCol] == EMPTY &&
+                IsAllowed(player, move.StartRow, move.StartCol, move.EndRow, move.EndCol))
+            {
+                return new MoveChain(new[]{new MoveStep(move.StartRow, move.StartCol, move.EndRow, move.EndCol)});
+            }
+
+            return null;
+        }
+
+        List<MoveChain> chains = JumpSequencesFrom(move.StartRow, move.StartCol, player);
+        foreach (MoveChain chain in chains)
+        {
+            if (chain.Steps.Count == 0)
+                continue;
+
+            MoveStep last = chain.Steps[^1];
+            if (last.R2 == move.EndRow && last.C2 == move.EndCol)
+                return chain;
+        }
+
+        return null;
+    }
+
     /// <summary>
     /// Применить один шаг к позиции на доске
     /// </summary>
@@ -405,18 +573,31 @@ public sealed class CornersBoard
     /// </summary>
     public void UpdateAfterFullMove(MoveChain chain, int player)
     {
+        if (chain.Steps.Count == 0)
+            return;
+
+        MoveStep first = chain.Steps[0];
+        MoveStep last = chain.Steps[^1];
+        UpdateAfterFullMove(CreateAiMove(first.R1, first.C1, last.R2, last.C2), player);
+    }
+
+    /// <summary>
+    /// Обновить информацию для дополнительных правил после компактного хода ИИ
+    /// </summary>
+    public void UpdateAfterFullMove(AiMove move, int player)
+    {
         if (player == WHITE)
         {
             WhiteMovesPlayed++;
 
             if (!MirrorBroken && WhiteMovesPlayed <= MIRROR_LIMIT + 1)
-                _lastWhiteMove = chain.Clone();
+                _lastWhiteMove = move;
         }
         else
         {
             BlackMovesPlayed++;
 
-            if (!MirrorBroken && _lastWhiteMove is not null && !IsMirror(chain))
+            if (!MirrorBroken && _lastWhiteMove is not null && !IsMirror(move))
                 MirrorBroken = true;
         }
     }
@@ -629,28 +810,19 @@ public sealed class CornersBoard
     /// Повторяет ли ход чёрных зеркально соответствующий ход белых
     /// (смотрим только на начало и конец хода, промежуточная цепочка неважна)
     /// </summary>
-    private bool IsMirror(MoveChain blackMove)
+    private bool IsMirror(AiMove blackMove)
     {
-        if (_lastWhiteMove is null)
+        if (_lastWhiteMove is not AiMove whiteMove)
             return false;
 
-        if (_lastWhiteMove.Steps.Count == 0 || blackMove.Steps.Count == 0)
-            return false;
-
-        MoveStep whiteFirst = _lastWhiteMove.Steps[0];
-        MoveStep whiteLast = _lastWhiteMove.Steps[^1];
-
-        MoveStep blackFirst = blackMove.Steps[0];
-        MoveStep blackLast = blackMove.Steps[^1];
-
-        Square mirroredWhiteStart = MirrorByCenter(new Square(whiteFirst.R1, whiteFirst.C1));
-        Square mirroredWhiteEnd = MirrorByCenter(new Square(whiteLast.R2, whiteLast.C2));
+        Square mirroredWhiteStart = MirrorByCenter(new Square(whiteMove.StartRow, whiteMove.StartCol));
+        Square mirroredWhiteEnd = MirrorByCenter(new Square(whiteMove.EndRow, whiteMove.EndCol));
 
         return
-            blackFirst.R1 == mirroredWhiteStart.R &&
-            blackFirst.C1 == mirroredWhiteStart.C &&
-            blackLast.R2 == mirroredWhiteEnd.R &&
-            blackLast.C2 == mirroredWhiteEnd.C;
+            blackMove.StartRow == mirroredWhiteStart.R &&
+            blackMove.StartCol == mirroredWhiteStart.C &&
+            blackMove.EndRow == mirroredWhiteEnd.R &&
+            blackMove.EndCol == mirroredWhiteEnd.C;
     }
 
     /// <summary>
@@ -668,33 +840,21 @@ public sealed class CornersBoard
         if (BlackMovesPlayed != MIRROR_LIMIT)
             return false;
 
-        if (_lastWhiteMove is null || _lastWhiteMove.Steps.Count == 0)
+        if (_lastWhiteMove is not AiMove whiteMove)
             return false;
 
-        MoveStep whiteFirst = _lastWhiteMove.Steps[0];
-        MoveStep whiteLast = _lastWhiteMove.Steps[^1];
-
-        requiredStart = MirrorByCenter(new Square(whiteFirst.R1, whiteFirst.C1));
-        forbiddenLanding = MirrorByCenter(new Square(whiteLast.R2, whiteLast.C2));
+        requiredStart = MirrorByCenter(new Square(whiteMove.StartRow, whiteMove.StartCol));
+        forbiddenLanding = MirrorByCenter(new Square(whiteMove.EndRow, whiteMove.EndCol));
 
         return true;
     }
 
     /// <summary>
-    /// Насколько ход перспективен, для упорядочивания ходов для алгоритма альфа-бета отсечения
+    /// Насколько ход ИИ перспективен, для упорядочивания ходов для алгоритма альфа-бета отсечения
     /// </summary>
-    public double MoveOrderingScore(MoveChain move, int player)
-    {
-        if (move.Steps.Count == 0)
-            return double.NegativeInfinity;
-
-        MoveStep first = move.Steps[0];
-        MoveStep last = move.Steps[^1];
-
-        int progress = DistanceToGoal(player, first.R1, first.C1) - DistanceToGoal(player, last.R2, last.C2);
-
-        return progress;
-    }
+    public double MoveOrderingScore(AiMove move, int player) =>
+        DistanceToGoal(player, move.StartRow, move.StartCol) -
+        DistanceToGoal(player, move.EndRow, move.EndCol);
 
     /// <summary>
     /// Базовая функция оценки позиции с точки зрения игрока rootPlayer, если очередь хода принадлежит игроку sideToMove
@@ -767,18 +927,13 @@ public sealed class CornersBoard
         return total;
     }
 
-    // Оценка хода, от -1 до 1, для MCTS
-    public double NormalizedMoveDeltaDist(int player, MoveChain move)
+    /// <summary>
+    /// Оценка хода, от -1 до 1, для MCTS
+    /// </summary>
+    public double NormalizedMoveDeltaDist(int player, AiMove move)
     {
-        if (move is null || move.Steps.Count == 0)
-            return 0.0;
-
-        MoveStep first = move.Steps[0];
-        MoveStep last = move.Steps[^1];
-
-        int before = DistanceToGoal(player, first.R1, first.C1);
-        int after = DistanceToGoal(player, last.R2, last.C2);
-
+        int before = DistanceToGoal(player, move.StartRow, move.StartCol);
+        int after = DistanceToGoal(player, move.EndRow, move.EndCol);
         return Math.Clamp((before - after) / 10.0, -1.0, 1.0);
     }
 
@@ -847,20 +1002,11 @@ public sealed class CornersBoard
           .Append('|').Append(MirrorBroken ? '1' : '0');
 
         if (_lastWhiteMove is null || MirrorBroken)
-        {
             sb.Append('|').Append('0');
-        }
         else
         {
-            sb.Append('|').Append(_lastWhiteMove.Steps.Count);
-            foreach (MoveStep step in _lastWhiteMove.Steps)
-            {
-                sb.Append(';')
-                  .Append(step.R1).Append(',')
-                  .Append(step.C1).Append(',')
-                  .Append(step.R2).Append(',')
-                  .Append(step.C2);
-            }
+            AiMove move = _lastWhiteMove.Value;
+            sb.Append('|').Append('1').Append(';').Append(move.From).Append(',').Append(move.To);
         }
 
         return sb.ToString();

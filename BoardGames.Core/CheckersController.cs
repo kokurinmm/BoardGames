@@ -89,16 +89,16 @@ public sealed class CheckersController : IGameController
     private CheckersBoard.MoveChain? _pendingAiMove; // текущий ход или цепочка ходов ИИ, для анимации
     private int _pendingAiStepIndex; // текущий шаг в цепочке ходов ИИ, для анимации
 
-    private readonly MctsSession<CheckersBoard, CheckersBoard.MoveChain> _mcts; // сеанс MCTS
+    private readonly MctsSession<CheckersBoard, CheckersBoard.AiMove> _mcts; // сеанс MCTS
 
     public CheckersController()
     {
-        _mcts = new MctsSession<CheckersBoard, CheckersBoard.MoveChain>(
-            legalMoves: (pos, side) => pos.AllMoves(side, deduplicate: true),
+        _mcts = new MctsSession<CheckersBoard, CheckersBoard.AiMove>(
+            legalMoves: (pos, side) => pos.AiMoves(side),
             applyMoveToCopy: (pos, move, side) =>
             {
                 CheckersBoard child = pos.Copy();
-                child.ApplyChain(move);
+                child.ApplyAiMove(move);
                 return child;
             },
             rolloutScore: CheckersMctsRolloutResult,
@@ -485,20 +485,20 @@ public sealed class CheckersController : IGameController
             return null;
         }
 
-        CheckersBoard.MoveChain? move;
+        CheckersBoard.AiMove? compactMove;
 
         if (Mode == AiMode.AlphaBeta)
         {
-            (double score, move) = AlphaBeta.Search(
+            (double score, compactMove) = AlphaBeta.Search(
                 position: _board,
-                legalMoves: (pos, side) => pos.AllMoves(side, deduplicate: true).OrderByDescending(ch => ch.Length).ToList(),
-                applyMoveToCopy: (pos, moveChain, side) =>
+                legalMoves: (pos, side) => pos.AiMoves(side).OrderByDescending(move => move.CaptureCount).ToList(),
+                applyMoveToCopy: (pos, move, side) =>
                 {
                     CheckersBoard child = pos.Copy();
-                    child.ApplyChain(moveChain);
+                    child.ApplyAiMove(move);
                     return child;
                 },
-                evaluate: (pos, root, side, generatedMoves) => pos.Evaluate(root, side, generatedMoves),
+                evaluate: (pos, root, side, generatedMoves) => pos.Evaluate(root, side),
                 opponent: CheckersBoard.Opponent,
                 isTerminal: (pos, side) => pos.QuietMoves >= CheckersBoard.DRAW_NUM, // отсутствие ходов проверяется отдельно
                 canPass: false,
@@ -509,31 +509,18 @@ public sealed class CheckersController : IGameController
                 maximizingPlayer: true,
                 forcingMoves: (pos, side) => // вынужденные взятия просчитывать до конца, на всю глубину
                 {
-                    List<CheckersBoard.MoveChain> captures = pos.CaptureMoves(side, deduplicate: true);
+                    List<CheckersBoard.AiMove> captures = pos.AiCaptureMoves(side);
                     if (captures.Count == 0)
                         return null;
-                    return captures.OrderByDescending(ch => ch.Length).ToList();
+                    return captures.OrderByDescending(move => move.CaptureCount).ToList();
                 });
         }
-        else if (Mode == AiMode.MonteCarlo)
-        {
-            move = MonteCarlo.BestMove(
-                position: _board,
-                legalMoves: (pos, side) => pos.AllMoves(side, deduplicate: true),
-                applyMoveToCopy: (pos, moveChain) =>
-                {
-                    CheckersBoard child = pos.Copy();
-                    child.ApplyChain(moveChain);
-                    return child;
-                },
-                playoutScore: (pos, player, rng) =>
-                    CheckersMctsRolloutResult(pos, player, CheckersBoard.Opponent(player), rng),
-                player: _aiColor,
-                simulations: MonteCarloSimulations);
-        }
         else
-            move = _mcts.SearchBestMove(_board, _turn, _aiColor, MctsTimeLimitMs);
-        return move;
+            compactMove = _mcts.SearchBestMove(_board, _turn, _aiColor, MctsTimeLimitMs);
+        if (compactMove is CheckersBoard.AiMove move)
+            return _board.ExpandAiMove(move); // конвертируем компактный ход в полную цепочку шагов
+        else
+            return null;
 
     }
 
@@ -551,7 +538,7 @@ public sealed class CheckersController : IGameController
             if (simulation.QuietMoves >= CheckersBoard.DRAW_NUM)
                 return 0.5; // ничья
 
-            List<CheckersBoard.MoveChain> moves = simulation.AllMoves(side, deduplicate: true);
+            List<CheckersBoard.AiMove> moves = simulation.AiMoves(side);
 
             if (moves.Count == 0)
             {
@@ -559,8 +546,8 @@ public sealed class CheckersController : IGameController
                 return winner == player ? 1.0 : 0.0;
             }
 
-            CheckersBoard.MoveChain randomMove = moves[rng.Next(moves.Count)];
-            simulation.ApplyChain(randomMove);
+            CheckersBoard.AiMove randomMove = moves[rng.Next(moves.Count)];
+            simulation.ApplyAiMove(randomMove);
             side = CheckersBoard.Opponent(side);
         }
 

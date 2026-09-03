@@ -79,18 +79,18 @@ public sealed class CornersController : IGameController
     private CornersBoard.MoveChain? _pendingAiMove; // текущий ход ИИ, для анимации
     private int _pendingAiStepIndex; // текущий шаг в ходе ИИ, для анимации
 
-    private readonly MctsSession<CornersBoard, CornersBoard.MoveChain> _mcts; // сеанс MCTS
+    private readonly MctsSession<CornersBoard, CornersBoard.AiMove> _mcts; // сеанс MCTS
 
     public bool IsAiTurn => !HumanVsHuman && !IsGameOver && _turn == _aiColor;
 
     public CornersController()
     {
-        _mcts = new MctsSession<CornersBoard, CornersBoard.MoveChain>(
-            legalMoves: (pos, side) => pos.AllMoves(side),
+        _mcts = new MctsSession<CornersBoard, CornersBoard.AiMove>(
+            legalMoves: (pos, side) => pos.AiMoves(side),
             applyMoveToCopy: (pos, move, side) =>
             {
                 CornersBoard child = pos.Copy();
-                child.ApplyChain(move, side);
+                child.ApplyAiMove(move, side);
                 return child;
             },
             rolloutScore: CornersMctsRolloutResult,
@@ -421,20 +421,20 @@ public sealed class CornersController : IGameController
         if (IsGameOver || _turn != _aiColor)
             return null;
 
+        CornersBoard.AiMove? compactMove;
+
         if (Mode == AiMode.AlphaBeta)
         {
-            (double score, CornersBoard.MoveChain? move) = AlphaBeta.Search(
+            (double score, compactMove) = AlphaBeta.Search(
                 position: _board,
-                legalMoves: (pos, side) => pos.AllMoves(side)
-                    .OrderByDescending(m => pos.MoveOrderingScore(m, side))
-                    .ToList(),
+                legalMoves: (pos, side) => pos.AiMoves(side).OrderByDescending(m => pos.MoveOrderingScore(m, side)).ToList(),
                 applyMoveToCopy: (pos, move, side) =>
                 {
                     CornersBoard child = pos.Copy();
-                    child.ApplyChain(move, side);
+                    child.ApplyAiMove(move, side);
                     return child;
                 },
-                evaluate: (pos, root, side, generatedMoves) => pos.Evaluate(root, side, generatedMoves),
+                evaluate: (pos, root, side, generatedMoves) => pos.Evaluate(root, side),
                 opponent: CornersBoard.Opponent,
                 isTerminal: (pos, side) => pos.IsTerminal(),
                 canPass: false,
@@ -443,27 +443,14 @@ public sealed class CornersController : IGameController
                 alpha: double.NegativeInfinity,
                 beta: double.PositiveInfinity,
                 maximizingPlayer: true);
-
-            return move;
-        }
-        else if (Mode == AiMode.MonteCarlo)
-        {
-            return MonteCarlo.BestMove(
-                position: _board,
-                legalMoves: (pos, side) => pos.AllMoves(side),
-                applyMoveToCopy: (pos, move) =>
-                {
-                    CornersBoard child = pos.Copy();
-                    child.ApplyChain(move, _aiColor);
-                    return child;
-                },
-                playoutScore: (pos, player, rng) =>
-                CornersMctsRolloutResult(pos, player, CornersBoard.Opponent(player), rng),
-                player: _aiColor,
-                simulations: MonteCarloSimulations);
         }
         else
-            return _mcts.SearchBestMove(_board, _turn, _aiColor, MctsTimeLimitMs);
+            compactMove = _mcts.SearchBestMove(_board, _turn, _aiColor, MctsTimeLimitMs);
+
+        if (compactMove is CornersBoard.AiMove move)
+            return _board.ExpandAiMove(move, _turn); // конвертируем компактный ход в полную цепочку шагов
+        else
+            return null;
     }
 
 
@@ -487,12 +474,12 @@ public sealed class CornersController : IGameController
                 break;
             }
 
-            List<CornersBoard.MoveChain> moves = simulation.AllMoves(side);
+            List<CornersBoard.AiMove> moves = simulation.AiMoves(side);
 
             if (moves.Count > 0)
             {
-                CornersBoard.MoveChain randomMove = ChooseBiasedRolloutMove(simulation, side, moves, rng);
-                simulation.ApplyChain(randomMove, side);
+                CornersBoard.AiMove randomMove = ChooseBiasedRolloutMove(simulation, side, moves, rng);
+                simulation.ApplyAiMove(randomMove, side);
                 side = CornersBoard.Opponent(side);
             }
             else
@@ -516,10 +503,10 @@ public sealed class CornersController : IGameController
     /// <summary>
     /// Выбор хода для Rollout: чем сильнее ход уменьшает расстояние до цели, тем больше вес, но все ходы возможны
     /// </summary>
-    private static CornersBoard.MoveChain ChooseBiasedRolloutMove(
+    private static CornersBoard.AiMove ChooseBiasedRolloutMove(
         CornersBoard position,
         int side,
-        List<CornersBoard.MoveChain> moves,
+        List<CornersBoard.AiMove> moves,
         Random rng)
     {
         if (moves.Count == 1)
@@ -538,27 +525,17 @@ public sealed class CornersController : IGameController
         if (totalWeight <= 0.0)
             return moves[rng.Next(moves.Count)];
 
-        int index = ChooseWeightedIndex(weights, totalWeight, rng);
-        return moves[index];
-    }
-
-    /// <summary>
-    /// Выбрать индекс по положительным весам
-    /// </summary>
-    private static int ChooseWeightedIndex(double[] weights, double totalWeight, Random rng)
-    {
         double r = rng.NextDouble() * totalWeight;
 
-        for (int i = 0; i < weights.Length; i++)
+        for (int i = 0; i < moves.Count; i++)
         {
             r -= weights[i];
             if (r <= 0.0)
-                return i;
+                return moves[i];
         }
 
-        return weights.Length - 1;
+        return moves[^1];
     }
-
 
     private void FinishTurn() // завершение хода
     {

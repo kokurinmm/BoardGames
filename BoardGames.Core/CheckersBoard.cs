@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Numerics;
 using System.Text;
 
 namespace BoardGames;
@@ -22,6 +23,9 @@ public sealed class CheckersBoard
     // обозначения игроков
     public const int WHITE = 1;
     public const int BLACK = -1;
+
+    // направления хода в шашках
+    private static readonly (int dr, int dc)[] DIRECTIONS = {(-1, -1), (-1, 1), (1, -1), (1, 1)};
 
     /// <summary>
     /// Содержимое доски (первый индекс - номер строки, второй - номер столбца)
@@ -135,6 +139,20 @@ public sealed class CheckersBoard
     }
 
     /// <summary>
+    /// Компактное представление полного хода для алгоритмов ИИ.
+    /// From и To - номера начальной и конечной клеток от 0 до 63;
+    /// CapturedMask - маска побитых фигур; FinalPiece - тип фигуры после хода.
+    /// </summary>
+    public readonly record struct AiMove(ulong CapturedMask, byte From, byte To, sbyte FinalPiece)
+    {
+        public int StartRow => From / BOARD_SIZE;
+        public int StartCol => From % BOARD_SIZE;
+        public int EndRow => To / BOARD_SIZE;
+        public int EndCol => To % BOARD_SIZE;
+        public int CaptureCount => BitOperations.PopCount(CapturedMask); // количество побитых фигур
+    }
+
+    /// <summary>
     /// Получить все допустимые ходы игрока (или только простые ходы, или только цепочки взятий)
     /// Для алгоритмов ИИ надо deduplicate = true: удалять цепочки взятий дамкой с дублирующимся результатом
     /// Для пользовательского хода надо deduplicate = false: все цепочки доступны
@@ -182,11 +200,10 @@ public sealed class CheckersBoard
 
         bool isKing = IsKing(piece);
         int moveDir = piece > 0 ? -1 : 1; // белые шашки идут вверх, чёрные вниз
-        (int dr, int dc)[] directions = { (-1, -1), (-1, 1), (1, -1), (1, 1) };
 
         List<MoveChain> result = new();
 
-        foreach ((int dr, int dc) in directions)
+        foreach ((int dr, int dc) in DIRECTIONS)
         {
             if (!isKing && dr != moveDir)
                 continue;
@@ -252,12 +269,11 @@ public sealed class CheckersBoard
         int opponent = Opponent(player);
         bool isKing = IsKing(piece);
 
-        (int dr, int dc)[] directions = { (-1, -1), (-1, 1), (1, -1), (1, 1) };
         bool foundContinuation = false;
 
         if (isKing) // возможные цепочки взятий для дамки
         {
-            foreach ((int dr, int dc) in directions)
+            foreach ((int dr, int dc) in DIRECTIONS)
             {
                 bool seenOpponent = false;
                 Square captured = default;
@@ -324,7 +340,7 @@ public sealed class CheckersBoard
         }
         else // возможные цепочки взятий обычной шашки
         {
-            foreach ((int dr, int dc) in directions)
+            foreach ((int dr, int dc) in DIRECTIONS)
             {
                 int nr = row + dr;
                 int nc = col + dc;
@@ -381,6 +397,278 @@ public sealed class CheckersBoard
         }
 
     }
+
+
+    /// <summary>
+    /// Найти все допустимые ходы игрока player в компактном виде для алгоритмов ИИ. 
+    /// В отличие от AllMoves, не создаёт списки шагов для каждого результата
+    /// </summary>
+    public List<AiMove> AiMoves(int player)
+    {
+        List<AiMove> captures = AiCaptureMoves(player);
+        if (captures.Count > 0)
+            return captures;
+
+        List<AiMove> moves = new();
+
+        for (int row = 0; row < BOARD_SIZE; row++)
+            for (int col = 0; col < BOARD_SIZE; col++)
+                if (IsPlayersPiece(Grid[row, col], player))
+                    AddAiSlidesFrom(row, col, moves);
+
+        return moves;
+    }
+
+    public List<AiMove> AiCaptureMoves(int player)
+    {
+        List<AiMove> moves = new();
+        HashSet<AiMove> finalMoves = new();
+
+        for (int row = 0; row < BOARD_SIZE; row++)
+            for (int col = 0; col < BOARD_SIZE; col++)
+                if (IsPlayersPiece(Grid[row, col], player))
+                    CollectAiJumpMoves(row, col, row, col, Grid[row, col], capturedMask: 0UL, moves, finalMoves);
+
+        return moves;
+    }
+
+    private void AddAiSlidesFrom(int row, int col, List<AiMove> moves)
+    {
+        int piece = Grid[row, col];
+        bool isKing = IsKing(piece);
+        int moveDir = piece > 0 ? -1 : 1;
+
+        foreach ((int dr, int dc) in DIRECTIONS)
+        {
+            if (!isKing && dr != moveDir)
+                continue;
+
+            int nr = row + dr;
+            int nc = col + dc;
+
+            if (isKing)
+            {
+                while (InBounds(nr, nc) && Grid[nr, nc] == EMPTY)
+                {
+                    moves.Add(CreateAiMove(row, col, nr, nc, 0UL, piece));
+                    nr += dr;
+                    nc += dc;
+                }
+            }
+            else if (InBounds(nr, nc) && Grid[nr, nc] == EMPTY)
+            {
+                int finalPiece = IsKingRow(piece, nr) ? MakeKing(piece) : piece;
+                moves.Add(CreateAiMove(row, col, nr, nc, 0UL, finalPiece));
+            }
+        }
+    }
+
+    private void CollectAiJumpMoves(
+        int row,
+        int col,
+        int startRow,
+        int startCol,
+        int piece,
+        ulong capturedMask,
+        List<AiMove> moves,
+        HashSet<AiMove> finalMoves)
+    {
+        int player = PieceColor(piece);
+        int opponent = Opponent(player);
+        bool isKing = IsKing(piece);
+        bool foundContinuation = false;
+
+        if (isKing)
+        {
+            foreach ((int dr, int dc) in DIRECTIONS)
+            {
+                bool seenOpponent = false;
+                Square captured = default;
+
+                for (int dist = 1; dist < BOARD_SIZE; dist++)
+                {
+                    int nr = row + dr * dist;
+                    int nc = col + dc * dist;
+
+                    if (!InBounds(nr, nc))
+                        break;
+
+                    int cell = Grid[nr, nc];
+
+                    if (cell == EMPTY)
+                    {
+                        if (!seenOpponent)
+                            continue;
+
+                        foundContinuation = true;
+
+                        Grid[row, col] = EMPTY;
+                        Grid[nr, nc] = piece;
+
+                        CollectAiJumpMoves(
+                            nr,
+                            nc,
+                            startRow,
+                            startCol,
+                            piece,
+                            capturedMask | SquareBit(captured),
+                            moves,
+                            finalMoves);
+
+                        Grid[nr, nc] = EMPTY;
+                        Grid[row, col] = piece;
+                        continue;
+                    }
+
+                    if (IsPlayersPiece(cell, player))
+                        break;
+
+                    if (IsPlayersPiece(cell, opponent))
+                    {
+                        Square candidate = new(nr, nc);
+
+                        if (IsCaptured(capturedMask, candidate) || seenOpponent)
+                            break;
+
+                        seenOpponent = true;
+                        captured = candidate;
+                        continue;
+                    }
+
+                    break;
+                }
+            }
+        }
+        else
+        {
+            foreach ((int dr, int dc) in DIRECTIONS)
+            {
+                int nr = row + dr;
+                int nc = col + dc;
+                int jr = row + 2 * dr;
+                int jc = col + 2 * dc;
+
+                if (!InBounds(nr, nc) || !InBounds(jr, jc))
+                    continue;
+
+                Square captured = new(nr, nc);
+                if (IsCaptured(capturedMask, captured) ||
+                    PieceColor(Grid[nr, nc]) != opponent ||
+                    Grid[jr, jc] != EMPTY)
+                {
+                    continue;
+                }
+
+                foundContinuation = true;
+                int nextPiece = IsKingRow(piece, jr) ? MakeKing(piece) : piece;
+
+                Grid[row, col] = EMPTY;
+                Grid[jr, jc] = nextPiece;
+
+                CollectAiJumpMoves(
+                    jr,
+                    jc,
+                    startRow,
+                    startCol,
+                    nextPiece,
+                    capturedMask | SquareBit(captured),
+                    moves,
+                    finalMoves);
+
+                Grid[jr, jc] = EMPTY;
+                Grid[row, col] = piece;
+            }
+        }
+
+        if (foundContinuation || capturedMask == 0UL)
+            return;
+
+        AiMove move = CreateAiMove(startRow, startCol, row, col, capturedMask, piece);
+        if (finalMoves.Add(move))
+            moves.Add(move);
+    }
+
+    /// <summary>
+    /// Компактный ход определяется начальной и конечной клетками, маской побитых фигур, финальным типом ходящей фигуры
+    /// </summary>
+    private static AiMove CreateAiMove(
+        int startRow,
+        int startCol,
+        int endRow,
+        int endCol,
+        ulong capturedMask,
+        int finalPiece) =>
+        new(
+            capturedMask,
+            (byte)(startRow * BOARD_SIZE + startCol),
+            (byte)(endRow * BOARD_SIZE + endCol),
+            (sbyte)finalPiece);
+
+    /// <summary>
+    /// Применить компактный ход ИИ к позиции
+    /// </summary>
+    public void ApplyAiMove(AiMove move)
+    {
+        int movingPiece = Grid[move.StartRow, move.StartCol];
+
+        Grid[move.StartRow, move.StartCol] = EMPTY;
+        Grid[move.EndRow, move.EndCol] = move.FinalPiece;
+
+        ulong mask = move.CapturedMask;
+        while (mask != 0UL)
+        {
+            int square = BitOperations.TrailingZeroCount(mask); // номер младшего установленного бита - там побитая фигура
+            Grid[square / BOARD_SIZE, square % BOARD_SIZE] = EMPTY; // очищаем клетку с побитой фигурой
+            mask &= mask - 1; // удаление младшего установленного бита. Продолжаем, пока не удалятся все
+        }
+
+        if (IsKing(movingPiece) && move.CapturedMask == 0UL)
+            QuietMoves++;
+        else
+            QuietMoves = 0;
+    }
+
+    /// <summary>
+    /// Восстановить одну полную цепочку шагов для выбранного алгоритмом ИИ компактного хода
+    /// </summary>
+    public MoveChain? ExpandAiMove(AiMove move)
+    {
+        List<MoveChain> chains = move.CapturedMask == 0UL
+            ? SlidesFrom(move.StartRow, move.StartCol)
+            : JumpSequencesFrom(move.StartRow, move.StartCol, deduplicate: true);
+
+        foreach (MoveChain chain in chains)
+        {
+            if (ToAiMove(chain) == move)
+                return chain;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Преобразование развёрнутой цепочки шагов в компактный ход для алгоритмов ИИ
+    /// </summary>
+    private AiMove ToAiMove(MoveChain chain)
+    {
+        MoveStep first = chain.Steps[0];
+        MoveStep last = chain.Steps[^1];
+        int finalPiece = Grid[first.R1, first.C1];
+        ulong capturedMask = 0UL;
+
+        foreach (MoveStep step in chain.Steps)
+        {
+            if (step.Captured is Square captured)
+                capturedMask |= SquareBit(captured); // добавление побитой фигуры в маску побитых фигур
+
+            if (IsKingRow(finalPiece, step.R2))
+                finalPiece = MakeKing(finalPiece);
+        }
+
+        return CreateAiMove(first.R1, first.C1, last.R2, last.C2, capturedMask, finalPiece);
+    }
+
+
 
     /// <summary>
     /// Выполнить на доске один ход (простой или одно взятие из цепочки)
@@ -470,9 +758,8 @@ public sealed class CheckersBoard
 
         bool isKing = IsKing(piece);
         int moveDir = piece > 0 ? -1 : 1;
-        (int dr, int dc)[] directions = { (-1, -1), (-1, 1), (1, -1), (1, 1) };
 
-        foreach ((int dr, int dc) in directions)
+        foreach ((int dr, int dc) in DIRECTIONS)
         {
             if (!isKing && dr != moveDir)
                 continue;
@@ -496,11 +783,9 @@ public sealed class CheckersBoard
         int player = PieceColor(piece);
         int opponent = Opponent(player);
 
-        (int dr, int dc)[] directions = { (-1, -1), (-1, 1), (1, -1), (1, 1) };
-
         if (IsKing(piece))
         {
-            foreach ((int dr, int dc) in directions)
+            foreach ((int dr, int dc) in DIRECTIONS)
             {
                 bool seenOpponent = false;
 
@@ -541,7 +826,7 @@ public sealed class CheckersBoard
             return false;
         }
 
-        foreach ((int dr, int dc) in directions)
+        foreach ((int dr, int dc) in DIRECTIONS)
         {
             int nr = row + dr;
             int nc = col + dc;

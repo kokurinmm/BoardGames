@@ -28,7 +28,7 @@ public static class AlphaBeta
         double beta,
         bool maximizingPlayer, // если True, то текущий ход принадлежит root_player
         Func<TPos, int, List<TMove>?>? forcingMoves = null) // вынужденные ходы (проверяются до конца) или null
-        where TMove : class
+        where TMove : struct
     {
         int sideToMove = maximizingPlayer ? rootPlayer : opponent(rootPlayer);
 

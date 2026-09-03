@@ -10,7 +10,7 @@ namespace BoardGames;
 /// Сеанс MCTS (Monte Carlo Tree Search) для одной партии
 /// Объект хранит дерево ходов с их оценками, которое сохраняется и достраивается после каждого хода
 /// </summary>
-public sealed class MctsSession<TPos, TMove> where TMove : class
+public sealed class MctsSession<TPos, TMove> where TMove : struct
 {
     /// <summary>
     /// Узел дерева MCTS

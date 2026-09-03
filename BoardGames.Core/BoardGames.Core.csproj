@@ -7,4 +7,8 @@
     <RootNamespace>BoardGames</RootNamespace>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Compile Remove="MonteCarlo.cs" />
+  </ItemGroup>
+
 </Project>

@@ -18,7 +18,6 @@ public enum GameKind
 public enum AiMode
 {
     AlphaBeta,
-    MonteCarlo, // удалён из текущего варианта программы
     Mcts
 }
 
